@@ -36,7 +36,8 @@ class RimeVimPlugin : StartupActivity {
         // 监听文档变化（输入时检测模式）
         editorFactory.eventMulticaster.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
-                val editor = event.editor
+                val editor = EditorFactory.getInstance().allEditors.firstOrNull { it.document == event.document }
+                    ?: return
                 if (editor.isDisposed) return
 
                 ApplicationManager.getApplication().invokeLater {

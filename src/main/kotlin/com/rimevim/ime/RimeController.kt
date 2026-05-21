@@ -57,9 +57,9 @@ class RimeController {
             currentAsciiMode = ascii
             thisLogger().info("Switched to ${if (ascii) "ASCII" else "Chinese"} mode")
         } catch (e: Exception) {
-            thisLogger().warn(e, "Failed to switch IME mode")
+            thisLogger().warn("Failed to switch IME mode", e)
         }
     }
 
-    fun getWeaselServerPath(): String? = weaselServerPath
+    fun resolvePath(): String? = weaselServerPath
 }

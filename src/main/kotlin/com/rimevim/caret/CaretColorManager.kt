@@ -1,6 +1,7 @@
 package com.rimevim.caret
 
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.CaretVisualAttributes.Weight
 import com.rimevim.settings.RimeVimSettings
 import java.awt.Color
 
@@ -11,7 +12,7 @@ object CaretColorManager {
     private val DEFAULT_CAPSLOCK_COLOR = Color(0xFFCC00)    // 黄色
 
     fun updateCaretColor(editor: Editor, isAsciiMode: Boolean, isCapsLock: Boolean) {
-        val settings = RimeVimSettings.getInstance()
+        val settings = RimeVimSettings.instance
         if (!settings.enabled) return
 
         val color = when {
@@ -23,7 +24,7 @@ object CaretColorManager {
         editor.caretModel.allCarets.forEach { caret ->
             val attributes = com.intellij.openapi.editor.CaretVisualAttributes(
                 color,
-                null
+                Weight.NORMAL
             )
             caret.setVisualAttributes(attributes)
         }
