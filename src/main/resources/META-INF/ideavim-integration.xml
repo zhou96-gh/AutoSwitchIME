@@ -1,0 +1,5 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.maddyhome.idea.vim">
+        <vimPluginExtension implementation="com.rimevim.RimeVimPlugin"/>
+    </extensions>
+</idea-plugin>
