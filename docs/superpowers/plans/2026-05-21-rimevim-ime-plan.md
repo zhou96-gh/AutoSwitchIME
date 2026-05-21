@@ -522,7 +522,6 @@ import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.options.Configurable
-import com.intellij.openapi.ui.Messages
 import com.intellij.ui.ColorPanel
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
@@ -547,6 +546,11 @@ class RimeVimSettings : PersistentStateComponent<RimeVimSettings> {
     var englishColor: String = "#00CC66"
     var chineseColor: String = "#FF6666"
     var capsLockColor: String = "#FFCC00"
+    
+    // Insert 模式自动切换规则
+    var insertModeAsciiRegex: String = ""      // 自动切换中英文的正则规则
+    var insertModeCapsRegex: String = ""       // 自动切换大写的正则规则
+    var insertModeLowerRegex: String = ""      // 自动切换小写的正则规则
 
     override fun getState(): RimeVimSettings = this
 
@@ -568,6 +572,9 @@ class RimeVimSettingsConfigurable : Configurable {
     private var englishColorPanel: ColorPanel? = null
     private var chineseColorPanel: ColorPanel? = null
     private var capsLockColorPanel: ColorPanel? = null
+    private var insertModeAsciiRegexField: JBTextField? = null
+    private var insertModeCapsRegexField: JBTextField? = null
+    private var insertModeLowerRegexField: JBTextField? = null
 
     @Nls(capitalization = Nls.Capitalization.Title)
     override fun getDisplayName(): String = "RimeVim IME"
@@ -609,6 +616,36 @@ class RimeVimSettingsConfigurable : Configurable {
         gbc.gridx = 1
         settingsPanel!!.add(capsLockColorPanel, gbc)
 
+        // 分隔线
+        gbc.gridy = 5; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(javax.swing.JSeparator(), gbc)
+
+        // Insert 模式自动切换规则标题
+        gbc.gridy = 6; gbc.gridx = 0; gbc.gridwidth = 2
+        settingsPanel!!.add(JBLabel("Insert 模式自动切换规则（正则表达式）:"), gbc)
+
+        // 自动切换中英文规则
+        gbc.gridy = 7; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("中英文切换规则:"), gbc)
+        insertModeAsciiRegexField = JBTextField()
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0
+        settingsPanel!!.add(insertModeAsciiRegexField, gbc)
+
+        // 自动切换大写规则
+        gbc.gridy = 8; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("大写切换规则:"), gbc)
+        insertModeCapsRegexField = JBTextField()
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(insertModeCapsRegexField, gbc)
+
+        // 自动切换小写规则
+        gbc.gridy = 9; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("小写切换规则:"), gbc)
+        insertModeLowerRegexField = JBTextField()
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(insertModeLowerRegexField, gbc)
+
         return settingsPanel!!
     }
 
@@ -618,7 +655,10 @@ class RimeVimSettingsConfigurable : Configurable {
                 pathField?.text != settings.weaselServerPath ||
                 englishColorPanel?.selectedColor?.let { toHex(it) } != settings.englishColor ||
                 chineseColorPanel?.selectedColor?.let { toHex(it) } != settings.chineseColor ||
-                capsLockColorPanel?.selectedColor?.let { toHex(it) } != settings.capsLockColor
+                capsLockColorPanel?.selectedColor?.let { toHex(it) } != settings.capsLockColor ||
+                insertModeAsciiRegexField?.text != settings.insertModeAsciiRegex ||
+                insertModeCapsRegexField?.text != settings.insertModeCapsRegex ||
+                insertModeLowerRegexField?.text != settings.insertModeLowerRegex
     }
 
     override fun apply() {
@@ -628,6 +668,9 @@ class RimeVimSettingsConfigurable : Configurable {
         englishColorPanel?.selectedColor?.let { settings.englishColor = toHex(it) }
         chineseColorPanel?.selectedColor?.let { settings.chineseColor = toHex(it) }
         capsLockColorPanel?.selectedColor?.let { settings.capsLockColor = toHex(it) }
+        settings.insertModeAsciiRegex = insertModeAsciiRegexField?.text ?: ""
+        settings.insertModeCapsRegex = insertModeCapsRegexField?.text ?: ""
+        settings.insertModeLowerRegex = insertModeLowerRegexField?.text ?: ""
     }
 
     override fun reset() {
@@ -637,6 +680,9 @@ class RimeVimSettingsConfigurable : Configurable {
         englishColorPanel?.selectedColor = decodeColor(settings.englishColor)
         chineseColorPanel?.selectedColor = decodeColor(settings.chineseColor)
         capsLockColorPanel?.selectedColor = decodeColor(settings.capsLockColor)
+        insertModeAsciiRegexField?.text = settings.insertModeAsciiRegex
+        insertModeCapsRegexField?.text = settings.insertModeCapsRegex
+        insertModeLowerRegexField?.text = settings.insertModeLowerRegex
     }
 
     private fun toHex(color: java.awt.Color): String {
@@ -658,7 +704,7 @@ class RimeVimSettingsConfigurable : Configurable {
 ```bash
 cd D:\ai_code\RimeVimIME
 git add .
-git commit -m "实现 RimeVimSettings 配置持久化和 Settings 面板"
+git commit -m "实现 RimeVimSettings 配置持久化和 Settings 面板（含正则规则配置）"
 ```
 
 ---
