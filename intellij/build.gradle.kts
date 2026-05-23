@@ -2,7 +2,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.3.0"
+    id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform") version "2.8.0"
 }
 
@@ -12,10 +12,12 @@ version = rootProject.version
 tasks.named("buildPlugin") {
     doLast {
         val distDir = layout.buildDirectory.dir("distributions").get().asFile
-        val oldFile = distDir.resolve("intellij-${project.version}.zip")
-        val newFile = distDir.resolve("AutoSwitchIME-${project.version}.zip")
-        if (oldFile.exists()) {
-            oldFile.renameTo(newFile)
+        val src = distDir.resolve("intellij-${project.version}.zip")
+        val outputDir = rootProject.layout.projectDirectory.dir("build/distributions").asFile
+        outputDir.mkdirs()
+        val dest = outputDir.resolve("AutoSwitchIME-IntelliJ-${project.version}.zip")
+        if (src.exists()) {
+            src.copyTo(dest, overwrite = true)
         }
     }
 }

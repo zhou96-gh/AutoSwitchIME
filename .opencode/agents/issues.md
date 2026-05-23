@@ -31,6 +31,8 @@
 | 重复监听器移除 | 1.0.0 | v0.1.38: 移除 RimeVimPlugin 中重复的 selectionChanged 监听器 |
 | 多编辑器架构重构 | 1.1.0 | 拆分为 core + intellij 模块，重命名为 AutoSwitchIME |
 | zip 产物命名修复 | 1.1.0 | `buildPlugin.doLast` 自动重命名 `intellij-<ver>.zip` → `AutoSwitchIME-<ver>.zip` |
+| 构建输出路径统一 | 1.1.0 | 产物输出到根目录 `build/distributions/AutoSwitchIME-<ver>.zip` |
+| Kotlin 插件重复加载 | 1.1.0 | 根项目声明版本 `apply false`，子模块去除版本号 |
 
 ## 待完成 🔄
 
@@ -101,17 +103,16 @@
 ## 构建规范
 
 ### 版本更新流程 (MUST FOLLOW)
-1. **修改版本号**: 在 `gradle.properties` 中更新 `pluginVersion`。
-2. **清理构建**: 执行 `.\gradlew.bat clean buildPlugin -x buildSearchableOptions`。
-3. **验证产物**: 检查 `intellij/build/distributions/AutoSwitchIME-<version>.zip` 文件名与版本号一致。
+1. **修改版本号**: 在 `gradle.properties` 中更新 `pluginVersion`
+2. **构建插件包**: `$env:JAVA_HOME="D:\Program Files\Java\java-21"; .\gradlew.bat clean :intellij:buildPlugin -x buildSearchableOptions -x prepareJarSearchableOptions`
+3. **验证产物**: 检查根目录 `build/distributions/AutoSwitchIME-<version>.zip`
 4. **同步 Lua 脚本**: 复制 `lua/rimevim_bridge.lua` 到 `%APPDATA%\Rime\lua\rimevim_bridge.lua`
 5. **重新部署 Rime**: 右击托盘图标 → 重新部署
+6. **记录变更**: 更新本文件记录版本变更内容
 
 **教训**: 严禁先构建后改版本号，否则产物文件名不匹配。多模块架构下构建命令需指定 `:intellij:buildPlugin`。
-
-**教训**: 严禁先构建后改版本号，否则产物文件名不匹配。
 
 ## 构建状态
 
 - 最后构建: `BUILD SUCCESSFUL` (1.1.0)
-- 输出: `intellij/build/distributions/AutoSwitchIME-1.1.0.zip`
+- 输出: `build/distributions/AutoSwitchIME-1.1.0.zip`
