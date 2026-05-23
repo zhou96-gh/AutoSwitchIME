@@ -6,8 +6,19 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.8.0"
 }
 
-group = "com.rimevim"
+group = property("pluginGroup")!!
 version = rootProject.version
+
+tasks.named("buildPlugin") {
+    doLast {
+        val distDir = layout.buildDirectory.dir("distributions").get().asFile
+        val oldFile = distDir.resolve("intellij-${project.version}.zip")
+        val newFile = distDir.resolve("AutoSwitchIME-${project.version}.zip")
+        if (oldFile.exists()) {
+            oldFile.renameTo(newFile)
+        }
+    }
+}
 
 repositories {
     mavenCentral()

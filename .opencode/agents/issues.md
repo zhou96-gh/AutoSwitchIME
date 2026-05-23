@@ -29,6 +29,8 @@
 | 上下文不跨行 | 1.0.0 | v0.1.33: 获取光标所在行的上下文文本，不跨行 |
 | 光标移动性能优化 | 1.0.0 | v0.1.38: 防抖 50ms、正则缓存、setAsciiMode 早返回、Service 引用缓存 |
 | 重复监听器移除 | 1.0.0 | v0.1.38: 移除 RimeVimPlugin 中重复的 selectionChanged 监听器 |
+| 多编辑器架构重构 | 1.1.0 | 拆分为 core + intellij 模块，重命名为 AutoSwitchIME |
+| zip 产物命名修复 | 1.1.0 | `buildPlugin.doLast` 自动重命名 `intellij-<ver>.zip` → `AutoSwitchIME-<ver>.zip` |
 
 ## 待完成 🔄
 
@@ -101,17 +103,15 @@
 ### 版本更新流程 (MUST FOLLOW)
 1. **修改版本号**: 在 `gradle.properties` 中更新 `pluginVersion`。
 2. **清理构建**: 执行 `.\gradlew.bat clean buildPlugin -x buildSearchableOptions`。
-3. **验证产物**: 检查 `build/distributions/RimeVimIME-<version>.zip` 文件名与版本号一致。
+3. **验证产物**: 检查 `intellij/build/distributions/AutoSwitchIME-<version>.zip` 文件名与版本号一致。
+4. **同步 Lua 脚本**: 复制 `lua/rimevim_bridge.lua` 到 `%APPDATA%\Rime\lua\rimevim_bridge.lua`
+5. **重新部署 Rime**: 右击托盘图标 → 重新部署
+
+**教训**: 严禁先构建后改版本号，否则产物文件名不匹配。多模块架构下构建命令需指定 `:intellij:buildPlugin`。
 
 **教训**: 严禁先构建后改版本号，否则产物文件名不匹配。
 
 ## 构建状态
 
-- 最后构建: `BUILD SUCCESSFUL` (1.0.0)
-- 输出: `build/distributions/RimeVimIME-1.0.0.zip` (~77 KB)
-- 注意: `buildSearchableOptions` 在 PhpStorm 2026.1 下失败，使用 `-x buildSearchableOptions` 跳过
-- 日志调试: `Help → Debug Log Settings` 输入 `com.rimevim#debug#separate`
-- 规则配置: 4 个独立规则 (中文前/后, 大写前/后)，前后任一匹配即切换
-- 默认规则: 锚点格式 (如 `.*[\u4e00-\u9fa5]$`)
-- API 迁移: `RimeVimPlugin` 使用 `ProjectActivity`
-- 性能优化: 光标移动防抖 50ms、正则 Pattern 缓存、`setAsciiMode` 状态早返回
+- 最后构建: `BUILD SUCCESSFUL` (1.1.0)
+- 输出: `intellij/build/distributions/AutoSwitchIME-1.1.0.zip`
