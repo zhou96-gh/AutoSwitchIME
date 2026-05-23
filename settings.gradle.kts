@@ -4,3 +4,5 @@ plugins {
 }
 
 rootProject.name = "RimeVimIME"
+include("core")
+include("intellij")
