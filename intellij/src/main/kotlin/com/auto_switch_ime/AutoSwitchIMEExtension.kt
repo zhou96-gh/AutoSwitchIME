@@ -28,6 +28,9 @@ import java.util.regex.Pattern
  */
 class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
 
+    // Regex pattern cache – avoid Pattern.compile() on every mode change
+    private val regexCache = HashMap<String, Pattern>(4)
+
     private val controller: AutoSwitchIMEController by lazy {
         ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
     }
@@ -135,34 +138,35 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                     AutoSwitchIMELogger.info("Insert context: before='$before', after='$after'")
                     val settings = AutoSwitchIMESettings.instance
                     val action = evaluateInsertModeRules(before, after, settings)
-                    when (action) {
-                        ImeAction.CHINESE -> {
-                            AutoSwitchIMELogger.info("Insert mode → Chinese (regex matched)")
-                            if (!isComposing) {
+
+                    // 正在 composing 时，只跳过切到英文的动作（避免干扰候选词窗口）
+                    // 切到中文/大写不会造成干扰（中文大概率已是中文，大写不影响输入法）
+                    if (isComposing && action == ImeAction.ENGLISH) {
+                        AutoSwitchIMELogger.info("Insert mode → composing, skip switch to English")
+                    } else {
+                        when (action) {
+                            ImeAction.CHINESE -> {
+                                AutoSwitchIMELogger.info("Insert mode → Chinese (regex matched)")
                                 controller.setAsciiMode(false)
+                                targetAscii = false
+                                targetCaps = false
                             }
-                            targetAscii = false
-                            targetCaps = false
-                        }
-                        ImeAction.CAPS -> {
-                            AutoSwitchIMELogger.info("Insert mode → Caps (regex matched)")
-                            if (!isComposing) {
+                            ImeAction.CAPS -> {
+                                AutoSwitchIMELogger.info("Insert mode → Caps (regex matched)")
                                 controller.setCapsMode()
+                                targetAscii = false
+                                targetCaps = true
                             }
-                            targetAscii = false
-                            targetCaps = true
-                        }
-                        ImeAction.ENGLISH -> {
-                            AutoSwitchIMELogger.info("Insert mode → English (default)")
-                            if (!isComposing) {
+                            ImeAction.ENGLISH -> {
+                                AutoSwitchIMELogger.info("Insert mode → English (default)")
                                 controller.setAsciiMode(true)
+                                targetAscii = true
+                                targetCaps = false
                             }
-                            targetAscii = true
-                            targetCaps = false
-                        }
-                        ImeAction.UNCHANGED -> {
-                            AutoSwitchIMELogger.debug("Insert mode → IME unchanged")
-                            targetKnown = false
+                            ImeAction.UNCHANGED -> {
+                                AutoSwitchIMELogger.debug("Insert mode → IME unchanged")
+                                targetKnown = false
+                            }
                         }
                     }
                 }
@@ -238,12 +242,13 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
     }
 
     /**
-     * 检查正则是否匹配（空规则视为匹配）
+     * 检查正则是否匹配（空规则视为匹配），复用已编译的 Pattern 避免重复编译
      */
     private fun matchesRegex(pattern: String, text: String): Boolean {
         if (pattern.isBlank()) return true
         return try {
-            Pattern.compile(pattern).matcher(text).find()
+            val compiled = regexCache.getOrPut(pattern) { Pattern.compile(pattern) }
+            compiled.matcher(text).find()
         } catch (e: Exception) {
             AutoSwitchIMELogger.warn("Invalid regex: $pattern", e)
             false

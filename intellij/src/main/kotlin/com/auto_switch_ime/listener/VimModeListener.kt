@@ -23,6 +23,9 @@ import java.util.regex.Pattern
  */
 class VimModeListener : EditorFactoryListener {
 
+    // Regex pattern cache – avoid Pattern.compile() on every call
+    private val regexCache = HashMap<String, Pattern>(4)
+
     override fun editorCreated(event: EditorFactoryEvent) {
         val editor = event.editor
         val project = editor.project ?: return
@@ -97,7 +100,11 @@ class VimModeListener : EditorFactoryListener {
                 val settings = AutoSwitchIMESettings.instance
                 val action = evaluateInsertModeRules(before, after, settings)
 
-                if (!isComposing) {
+                // 正在 composing 时，只跳过切到英文的动作（避免干扰候选词窗口）
+                // 切到中文/大写不会造成干扰（中文大概率已是中文，大写不影响输入法）
+                if (isComposing && action == ImeAction.ENGLISH) {
+                    AutoSwitchIMELogger.debug("VimModeListener (Insert mode): composing, skip switch to English")
+                } else {
                     when (action) {
                         ImeAction.CHINESE -> {
                             AutoSwitchIMELogger.info("VimModeListener (Insert mode): Chinese mode")
@@ -115,8 +122,6 @@ class VimModeListener : EditorFactoryListener {
                             AutoSwitchIMELogger.debug("VimModeListener (Insert mode): IME unchanged")
                         }
                     }
-                } else {
-                    AutoSwitchIMELogger.debug("VimModeListener (Insert mode): skipping due to composing")
                 }
             }
         }
@@ -178,12 +183,13 @@ class VimModeListener : EditorFactoryListener {
     }
 
     /**
-     * 检查正则是否匹配（空规则视为匹配）
+     * 检查正则是否匹配（空规则视为匹配），复用已编译的 Pattern 避免重复编译
      */
     private fun matchesRegex(pattern: String, text: String): Boolean {
         if (pattern.isBlank()) return true
         return try {
-            Pattern.compile(pattern).matcher(text).find()
+            val compiled = regexCache.getOrPut(pattern) { Pattern.compile(pattern) }
+            compiled.matcher(text).find()
         } catch (e: Exception) {
             AutoSwitchIMELogger.warn("Invalid regex: $pattern", e)
             false

@@ -2,7 +2,7 @@
 
 IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。
 
-**当前版本**: 1.1.1（多编辑器架构）
+**当前版本**: 1.1.5（Caps Lock 状态检测修复）
 
 ## 模块索引
 
@@ -25,7 +25,7 @@ IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英
 - **目标 IDE**: PhpStorm 2026.1 (build 261.*)
 - **IdeaVim**: 2.35.2
 - **构建**: `.\gradlew.bat build`
-- **运行**: `.\gradlew.bat runIde`
+- **运行**: `.\gradlew.bat :intellij:runIde`
 
 ## 版本更新流程
 
@@ -40,7 +40,7 @@ IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英
 - **多编辑器架构**：核心库 (`core/`) + IntelliJ 插件 (`intellij/`) + VSCode 扩展 (`vscode/`)
 - **ImeProvider 接口**：平台无关的 IME 切换接口，支持多种输入法
 - **状态文件**：每个输入法独立文件（如 `ime-state-rime.json`）
-- **IME 状态检测**：优先使用 Rime Lua 脚本写入的状态文件，回退 JNA IMM32 API
+- **IME 状态检测**：优先使用 Rime Lua 脚本写入的状态文件（v1.1.4 起 isComposing 不再回退 JNA）
 - **Normal 模式强制英文**：检测到手动切换中文时自动强制回英文（带窗口焦点检测）
 - **防止递归**：`isForcingImeSwitch` 标志 + `CountDownLatch` 同步
 - **光标颜色**：中文=绿色，英文=白色，Caps=黄色

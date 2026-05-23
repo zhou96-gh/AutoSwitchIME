@@ -30,9 +30,20 @@
 | 光标移动性能优化 | 1.0.0 | v0.1.38: 防抖 50ms、正则缓存、setAsciiMode 早返回、Service 引用缓存 |
 | 重复监听器移除 | 1.0.0 | v0.1.38: 移除 RimeVimPlugin 中重复的 selectionChanged 监听器 |
 | 多编辑器架构重构 | 1.1.0 | 拆分为 core + intellij 模块，重命名为 AutoSwitchIME |
-| zip 产物命名修复 | 1.1.0 | `buildPlugin.doLast` 自动重命名 `intellij-<ver>.zip` → `AutoSwitchIME-<ver>.zip` |
-| 构建输出路径统一 | 1.1.0 | 产物输出到根目录 `build/distributions/AutoSwitchIME-<ver>.zip` |
+| zip 产物命名修复 | 1.1.0 | `buildPlugin.doLast` 自动重命名为含编辑器类型的文件名 |
+| 构建输出路径统一 | 1.1.0 | 产物输出到根目录 `build/distributions/AutoSwitchIME-IntelliJ-<ver>.zip` |
 | Kotlin 插件重复加载 | 1.1.0 | 根项目声明版本 `apply false`，子模块去除版本号 |
+| plugin.xml 修复 | 1.1.2 | 移除 `<applicationListeners>`（EditorFactoryListener 不支持此注册方式）、恢复 `<postStartupActivity>` |
+| 服务级别修复 | 1.1.2 | `AutoSwitchIMEController`/`AutoSwitchIMEStateWatcher` 的 `@Service` 添加 `Level.APP`，使 `getApplication().getService()` 能正确获取 |
+| JNA 加载修复 | 1.1.2 | JNA 改为 `compileOnly`，利用 IDE 自带 JNA，解决 `UnsatisfiedLinkError: Unable to locate JNA native support library` |
+| 默认颜色修正 | 1.1.3 | 英文=白色 `#FFFFFF`、中文=绿色 `#00CC66`、Caps=黄色 `#FFCC00` |
+| 大写规则优化 | 1.1.3 | 前 `.*[A-Z]{2,}[0-9_]?$`（≥2大写）、后 `^[A-Z][0-9_]?.*`（单个大写开头） |
+| 日志默认关闭 | 1.1.3 | logError/logWarn/logInfo/logDebug 默认全部 false |
+| 中文规则源码直写 | 1.1.3 | `[\u4e00-\u9fa5]` → `[一-龥]`，避免配置页显示转义字符 |
+| isComposing 跳过修复 | 1.1.4 | Insert 模式只跳过切英文（`action == ENGLISH`），切中文/大写照常执行 |
+| JNA isComposing 回退移除 | 1.1.4 | `isComposingViaJna()` 的 `IMC_GETCONVERSIONMODE` 只能检测中文模式而非真实的 composing 状态，导致 Lua 写入 `false` 后被 JNA 覆写为 `true`。改用只信任状态文件 |
+| 中文规则恢复 Unicode | 1.1.4 | `[一-龥]` → `[\u4e00-\u9fa5]`（编译后等价，源码可读性偏好） |
+| Caps Lock 状态初始化 | 1.1.5 | Lua init `caps_lock = false`（用户确认 Lua 逻辑正确，状态由按键检测更新） |
 
 ## 待完成 🔄
 
@@ -114,5 +125,5 @@
 
 ## 构建状态
 
-- 最后构建: `BUILD SUCCESSFUL` (1.1.0)
-- 输出: `build/distributions/AutoSwitchIME-1.1.0.zip`
+- 最后构建: `BUILD SUCCESSFUL` (1.1.5)
+- 输出: `build/distributions/AutoSwitchIME-IntelliJ-1.1.5.zip`

@@ -2,9 +2,9 @@
 
 > ⚠️ 详细 agent 配置已迁移到 `.opencode/agents/` 目录，本文档保留核心快速参考。
 
-IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。
+IntelliJ 插件：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。（VSCode 扩展计划中）
 
-**当前版本**: 1.1.1（多编辑器架构）
+**当前版本**: 1.1.5（多编辑器架构）
 
 ## 分模块配置索引
 
@@ -26,9 +26,9 @@ IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英
 - **IntelliJ Platform Gradle Plugin**: 2.8.0
 - **目标 IDE**: PhpStorm 2026.1 (build 261.*)
 - **IdeaVim**: 2.35.2
-- **构建**: `.\gradlew.bat build`
-- **运行**: `.\gradlew.bat runIde`
-- **输出**: `build/distributions/AutoSwitchIME-<version>.zip` (~77 KB)
+- **构建**: `.\gradlew.bat :intellij:buildPlugin`
+- **运行**: `.\gradlew.bat :intellij:runIde`
+- **输出**: `build/distributions/AutoSwitchIME-IntelliJ-<version>.zip`
 
 ## 版本更新流程（每次发版必须执行）
 
@@ -69,7 +69,7 @@ interface ImeProvider {
 
 ### 核心特性
 
-- **IME 状态检测**：优先使用 Rime Lua 脚本写入的状态文件，回退 JNA IMM32 API
+- **IME 状态检测**：优先使用 Rime Lua 脚本写入的状态文件（v1.1.4 起 isComposing 不再回退 JNA）
 - **Normal 模式强制英文**：检测到手动切换中文时自动强制回英文（带窗口焦点检测）
 - **防止递归**：`isForcingImeSwitch` 标志 + `CountDownLatch` 同步
 - **光标颜色**：中文=绿色，英文=白色，Caps=黄色

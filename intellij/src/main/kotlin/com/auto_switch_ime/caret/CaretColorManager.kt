@@ -8,8 +8,8 @@ import java.awt.Color
 
 object CaretColorManager {
 
-    private val DEFAULT_ENGLISH_COLOR = Color(0x00CC66)    // 绿色
-    private val DEFAULT_CHINESE_COLOR = Color(0xFF6666)     // 红色
+    private val DEFAULT_ENGLISH_COLOR = Color(0xFFFFFF)    // 白色
+    private val DEFAULT_CHINESE_COLOR = Color(0x00CC66)     // 绿色
     private val DEFAULT_CAPSLOCK_COLOR = Color(0xFFCC00)    // 黄色
 
     fun updateCaretColor(editor: Editor, isAsciiMode: Boolean, isCapsLock: Boolean) {
