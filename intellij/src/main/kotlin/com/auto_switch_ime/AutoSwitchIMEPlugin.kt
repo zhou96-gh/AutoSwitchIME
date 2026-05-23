@@ -135,8 +135,7 @@ class AutoSwitchIMEPlugin : ProjectActivity {
      *
      * 注意：
      * - Rime 正在输入（显示候选词窗口）时跳过输入法切换
-     * - 所有输入法切换通过 AutoSwitchIMEController 执行，其内部已更新光标颜色
-     * - 此处仅负责根据模式决定调用哪个方法，不重复更新光标颜色
+     * - IME 切换后同步更新光标颜色
      */
     private fun updateEditorState(editor: Editor) {
         if (!AutoSwitchIMESettings.instance.enabled) return
@@ -164,6 +163,11 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                 AutoSwitchIMELogger.debug("Rime is composing, skipping IME switch")
             }
 
+            // 目标状态（用于切换 IME 后更新光标颜色）
+            var targetAscii = true
+            var targetCaps = false
+            var targetKnown = true
+
             // 统一逻辑：仅检查是否处于 Normal 模式，其他默认 Insert 模式
             if (VimModeChecker.isInNormalMode()) {
                 // Normal/Visual/Select 模式：强制切换英文
@@ -171,33 +175,52 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                 if (!isComposing) {
                     controller.setAsciiMode(true)
                 }
+                targetAscii = true
+                targetCaps = false
             } else {
                 // Insert 模式（或无 IdeaVim）：执行正则规则评估
                 val (before, after) = getLineContextText(editor)
                 val settings = AutoSwitchIMESettings.instance
                 val action = evaluateInsertModeRules(before, after, settings)
 
-                if (!isComposing) {
+                // 正在 composing 时，只跳过切到英文的动作（避免干扰候选词窗口）
+                // 切到中文/大写不会造成干扰（中文大概率已是中文，大写不影响输入法）
+                if (isComposing && action == ImeAction.ENGLISH) {
+                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Insert mode): composing, skip switch to English")
+                } else {
                     when (action) {
                         ImeAction.CHINESE -> {
                             AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Chinese mode")
                             controller.setAsciiMode(false)
+                            targetAscii = false
+                            targetCaps = false
                         }
                         ImeAction.CAPS -> {
                             AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Caps mode")
                             controller.setCapsMode()
+                            targetAscii = false
+                            targetCaps = true
                         }
                         ImeAction.ENGLISH -> {
                             AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): English mode")
                             controller.setAsciiMode(true)
+                            targetAscii = true
+                            targetCaps = false
                         }
                         ImeAction.UNCHANGED -> {
                             AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Insert mode): IME unchanged")
+                            targetKnown = false
                         }
                     }
-                } else {
-                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Insert mode): skipping due to composing")
                 }
+            }
+
+            // 同步更新光标颜色
+            if (targetKnown) {
+                CaretColorManager.updateCaretColor(editor, targetAscii, targetCaps)
+            } else {
+                val state = ImeStateDetector.getCurrentState(controller.stateWatcher, controller.getTrackedState())
+                CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
             }
         }
     }
