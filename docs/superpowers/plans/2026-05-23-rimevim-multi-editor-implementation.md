@@ -223,7 +223,6 @@ enum class ImeType {
     RIME,          // 小狼毫 Rime/Weasel
     SOGOU,         // 搜狗输入法
     MS_PINYIN,     // 微软拼音
-    QQ_PINYIN,     // QQ 拼音
     CUSTOM         // 自定义（通过外部脚本）
 }
 ```
@@ -251,7 +250,6 @@ object ImeConstants {
         ImeType.RIME -> "ime-state-rime.json"
         ImeType.SOGOU -> "ime-state-sogou.json"
         ImeType.MS_PINYIN -> "ime-state-mspinyin.json"
-        ImeType.QQ_PINYIN -> "ime-state-qqpinyin.json"
         ImeType.CUSTOM -> "ime-state-custom.json"
     }
     

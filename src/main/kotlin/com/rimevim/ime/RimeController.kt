@@ -76,6 +76,12 @@ class RimeController {
      * @param ascii true=英文(ASCII), false=中文
      */
     fun setAsciiMode(ascii: Boolean) {
+        // 如果已是目标模式且非大写，跳过 WeaselServer 进程调用，但仍需更新光标颜色
+        if (currentAsciiMode == ascii && !currentCapsMode) {
+            updateAllCaretColors(ascii, false)
+            return
+        }
+
         // 如果当前已是大写模式，先退出大写
         if (currentCapsMode && ascii) {
             RimeVimLogger.debug("Exiting caps mode before switching to ASCII")
@@ -164,15 +170,20 @@ class RimeController {
             return
         }
 
+        // 获取当前聚焦的编辑器窗口 ID（用于调试）
+        val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull { it.contentComponent.hasFocus() }
+        val windowId = focusedEditor?.let { System.identityHashCode(it.contentComponent) } ?: "none"
+        val isIntelliJFocused = focusedEditor != null
+
         try {
-            RimeVimLogger.debug("Executing: $path $arg")
+            RimeVimLogger.debug("Executing: $path $arg (IntelliJ focused=$isIntelliJFocused, windowId=$windowId)")
             val process = ProcessBuilder(path, arg)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start()
             val exited = process.waitFor(1, TimeUnit.SECONDS)
             if (exited) {
-                RimeVimLogger.info("Switched to $label mode (exitCode=${process.exitValue()})")
+                RimeVimLogger.info("Switched to $label mode (exitCode=${process.exitValue()}, windowId=$windowId)")
             } else {
                 RimeVimLogger.warn("Switch to $label mode timed out")
                 process.destroy()

@@ -13,7 +13,7 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
-    <depends optional="true" config-file="ideavim-integration.xml">com.maddyhome.idea.vim</depends>
+    <depends optional="true" config-file="ideavim-integration.xml">IdeaVIM</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable
@@ -23,6 +23,10 @@
                 displayName="RimeVim IME"/>
         <applicationService
                 serviceImplementation="com.rimevim.settings.RimeVimSettings"/>
+        <applicationService
+                serviceImplementation="com.rimevim.ime.RimeController"/>
+        <applicationService
+                serviceImplementation="com.rimevim.ime.RimeStateFileWatcher"/>
         <postStartupActivity implementation="com.rimevim.RimeVimPlugin"/>
     </extensions>
 

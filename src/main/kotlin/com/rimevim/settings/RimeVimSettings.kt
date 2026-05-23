@@ -5,18 +5,26 @@ import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.options.ConfigurationException
 import com.intellij.ui.ColorPanel
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.xmlb.XmlSerializerUtil
+import com.rimevim.ime.ImeStateDetector
 import com.rimevim.ime.WeaselPathDetector
+import com.rimevim.util.RimeVimLogger
 import org.jetbrains.annotations.Nls
+import java.awt.BorderLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
+import java.io.File
+import java.util.regex.Pattern
+import javax.swing.JButton
 import javax.swing.JCheckBox
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JSeparator
+import javax.swing.JTextArea
 
 @State(
     name = "RimeVimSettings",
@@ -31,9 +39,18 @@ class RimeVimSettings : PersistentStateComponent<RimeVimSettings> {
     var capsLockColor: String = "#FFCC00"
 
     // Insert 模式自动切换规则
-    var insertModeAsciiRegex: String = ""
-    var insertModeCapsRegex: String = ""
-    var insertModeLowerRegex: String = ""
+    // 默认：光标前以中文字符结尾，或光标后以中文字符开头时切换为中文模式
+    var insertModeChineseBeforeRegex: String = ".*[\u4e00-\u9fa5]$"
+    var insertModeChineseAfterRegex: String = "^[\u4e00-\u9fa5].*"
+    // 默认：光标前以大写/数字/下划线结尾，或光标后以大写/数字/下划线开头时切换为大写模式
+    var insertModeCapsBeforeRegex: String = ".*[A-Z0-9_]$"
+    var insertModeCapsAfterRegex: String = "^[A-Z0-9_].*"
+
+    // 日志开关
+    var logError: Boolean = true
+    var logWarn: Boolean = true
+    var logInfo: Boolean = true
+    var logDebug: Boolean = false
 
     override fun getState(): RimeVimSettings = this
 
@@ -55,9 +72,22 @@ class RimeVimSettingsConfigurable : Configurable {
     private var englishColorPanel: ColorPanel? = null
     private var chineseColorPanel: ColorPanel? = null
     private var capsLockColorPanel: ColorPanel? = null
-    private var insertModeAsciiRegexField: JBTextField? = null
-    private var insertModeCapsRegexField: JBTextField? = null
-    private var insertModeLowerRegexField: JBTextField? = null
+    private var insertModeChineseBeforeRegexField: JBTextField? = null
+    private var insertModeChineseAfterRegexField: JBTextField? = null
+    private var insertModeCapsBeforeRegexField: JBTextField? = null
+    private var insertModeCapsAfterRegexField: JBTextField? = null
+    private var logErrorCheckBox: JCheckBox? = null
+    private var logWarnCheckBox: JCheckBox? = null
+    private var logInfoCheckBox: JCheckBox? = null
+    private var logDebugCheckBox: JCheckBox? = null
+
+    // 调试区域
+    private var testConfigButton: JButton? = null
+    private var configStatusArea: JTextArea? = null
+    private var regexBeforeField: JBTextField? = null
+    private var regexAfterField: JBTextField? = null
+    private var regexTestButton: JButton? = null
+    private var regexResultArea: JTextArea? = null
 
     @Nls(capitalization = Nls.Capitalization.Title)
     override fun getDisplayName(): String = "RimeVim IME"
@@ -109,28 +139,124 @@ class RimeVimSettingsConfigurable : Configurable {
         gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("Insert 模式自动切换规则（正则表达式）:"), gbc)
 
-        // 自动切换中英文规则
+        // 中文规则 - 光标前
         gbc.gridy = 7; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
-        settingsPanel!!.add(JBLabel("中英文切换规则:"), gbc)
-        insertModeAsciiRegexField = JBTextField()
+        settingsPanel!!.add(JBLabel("中文规则 (光标前):"), gbc)
+        insertModeChineseBeforeRegexField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0
-        settingsPanel!!.add(insertModeAsciiRegexField, gbc)
+        settingsPanel!!.add(insertModeChineseBeforeRegexField, gbc)
 
-        // 自动切换大写规则
+        // 中文规则 - 光标后
         gbc.gridy = 8; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
-        settingsPanel!!.add(JBLabel("大写切换规则:"), gbc)
-        insertModeCapsRegexField = JBTextField()
+        settingsPanel!!.add(JBLabel("中文规则 (光标后):"), gbc)
+        insertModeChineseAfterRegexField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
-        settingsPanel!!.add(insertModeCapsRegexField, gbc)
+        settingsPanel!!.add(insertModeChineseAfterRegexField, gbc)
 
-        // 自动切换小写规则
+        // 大写规则 - 光标前
         gbc.gridy = 9; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
-        settingsPanel!!.add(JBLabel("小写切换规则:"), gbc)
-        insertModeLowerRegexField = JBTextField()
+        settingsPanel!!.add(JBLabel("大写规则 (光标前):"), gbc)
+        insertModeCapsBeforeRegexField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
-        settingsPanel!!.add(insertModeLowerRegexField, gbc)
+        settingsPanel!!.add(insertModeCapsBeforeRegexField, gbc)
 
-        return settingsPanel!!
+        // 大写规则 - 光标后
+        gbc.gridy = 10; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("大写规则 (光标后):"), gbc)
+        insertModeCapsAfterRegexField = JBTextField()
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(insertModeCapsAfterRegexField, gbc)
+
+        // 分隔线
+        gbc.gridy = 11; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(JSeparator(), gbc)
+
+        // 日志开关
+        gbc.gridy = 12; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("日志输出开关:"), gbc)
+        
+        gbc.gridy = 13; gbc.gridx = 0; gbc.gridwidth = 1
+        logErrorCheckBox = JCheckBox("错误 (ERROR)")
+        settingsPanel!!.add(logErrorCheckBox, gbc)
+        
+        gbc.gridx = 1
+        logWarnCheckBox = JCheckBox("警告 (WARN)")
+        settingsPanel!!.add(logWarnCheckBox, gbc)
+        
+        gbc.gridy = 14; gbc.gridx = 0
+        logInfoCheckBox = JCheckBox("信息 (INFO)")
+        settingsPanel!!.add(logInfoCheckBox, gbc)
+        
+        gbc.gridx = 1
+        logDebugCheckBox = JCheckBox("调试 (DEBUG)")
+        settingsPanel!!.add(logDebugCheckBox, gbc)
+
+        // 分隔线
+        gbc.gridy = 15; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(JSeparator(), gbc)
+
+        // 调试区域标题
+        gbc.gridy = 16; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("调试工具:"), gbc)
+
+        // 配置检测按钮
+        gbc.gridy = 17; gbc.gridx = 0; gbc.gridwidth = 1
+        testConfigButton = JButton("检测配置状态")
+        settingsPanel!!.add(testConfigButton, gbc)
+
+        // 配置状态显示区域
+        configStatusArea = JTextArea(4, 50)
+        configStatusArea!!.isEditable = false
+        configStatusArea!!.lineWrap = true
+        configStatusArea!!.wrapStyleWord = true
+        gbc.gridy = 18; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(configStatusArea, gbc)
+
+        // 正则测试区域
+        gbc.gridy = 19; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("正则规则测试 (分别输入光标前/后文本):"), gbc)
+
+        gbc.gridy = 20; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("光标前:"), gbc)
+        regexBeforeField = JBTextField()
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0
+        settingsPanel!!.add(regexBeforeField, gbc)
+
+        gbc.gridy = 21; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(JBLabel("光标后:"), gbc)
+        regexAfterField = JBTextField()
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(regexAfterField, gbc)
+
+        gbc.gridy = 22; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        regexTestButton = JButton("测试匹配")
+        settingsPanel!!.add(regexTestButton, gbc)
+
+        // 正则测试结果
+        regexResultArea = JTextArea(3, 50)
+        regexResultArea!!.isEditable = false
+        regexResultArea!!.lineWrap = true
+        regexResultArea!!.wrapStyleWord = true
+        gbc.gridy = 23; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
+        settingsPanel!!.add(regexResultArea, gbc)
+
+        // 使用 BorderLayout 包装，消除顶部空白
+        val wrapper = JPanel(BorderLayout())
+        wrapper.add(settingsPanel!!, BorderLayout.NORTH)
+
+        // 按钮监听器（必须在组件创建后添加）
+        testConfigButton?.addActionListener {
+            testConfiguration()
+        }
+        regexTestButton?.addActionListener {
+            testRegex()
+        }
+
+        return wrapper
     }
 
     override fun isModified(): Boolean {
@@ -140,21 +266,47 @@ class RimeVimSettingsConfigurable : Configurable {
                 englishColorPanel?.selectedColor?.let { toHex(it) } != settings.englishColor ||
                 chineseColorPanel?.selectedColor?.let { toHex(it) } != settings.chineseColor ||
                 capsLockColorPanel?.selectedColor?.let { toHex(it) } != settings.capsLockColor ||
-                insertModeAsciiRegexField?.text != settings.insertModeAsciiRegex ||
-                insertModeCapsRegexField?.text != settings.insertModeCapsRegex ||
-                insertModeLowerRegexField?.text != settings.insertModeLowerRegex
+                insertModeChineseBeforeRegexField?.text != settings.insertModeChineseBeforeRegex ||
+                insertModeChineseAfterRegexField?.text != settings.insertModeChineseAfterRegex ||
+                insertModeCapsBeforeRegexField?.text != settings.insertModeCapsBeforeRegex ||
+                insertModeCapsAfterRegexField?.text != settings.insertModeCapsAfterRegex ||
+                logErrorCheckBox?.isSelected != settings.logError ||
+                logWarnCheckBox?.isSelected != settings.logWarn ||
+                logInfoCheckBox?.isSelected != settings.logInfo ||
+                logDebugCheckBox?.isSelected != settings.logDebug
     }
 
     override fun apply() {
         val settings = RimeVimSettings.instance
         settings.enabled = enabledCheckBox?.isSelected ?: true
-        settings.weaselServerPath = pathField?.text ?: ""
+        
+        // 验证 WeaselServer 路径
+        val pathText = pathField?.text?.trim() ?: ""
+        if (pathText.isNotBlank()) {
+            val file = File(pathText)
+            if (!file.exists()) {
+                throw ConfigurationException("WeaselServer.exe 不存在: $pathText")
+            }
+            if (file.isDirectory) {
+                throw ConfigurationException("路径应为 WeaselServer.exe 文件，而非目录: $pathText\n\n正确示例: D:\\Program Files\\Rime\\weasel-0.17.4\\WeaselServer.exe")
+            }
+            if (!file.name.equals("WeaselServer.exe", ignoreCase = true)) {
+                throw ConfigurationException("文件名应为 WeaselServer.exe，当前: ${file.name}")
+            }
+        }
+        settings.weaselServerPath = pathText
+        
         englishColorPanel?.selectedColor?.let { settings.englishColor = toHex(it) }
         chineseColorPanel?.selectedColor?.let { settings.chineseColor = toHex(it) }
         capsLockColorPanel?.selectedColor?.let { settings.capsLockColor = toHex(it) }
-        settings.insertModeAsciiRegex = insertModeAsciiRegexField?.text ?: ""
-        settings.insertModeCapsRegex = insertModeCapsRegexField?.text ?: ""
-        settings.insertModeLowerRegex = insertModeLowerRegexField?.text ?: ""
+        settings.insertModeChineseBeforeRegex = insertModeChineseBeforeRegexField?.text ?: ""
+        settings.insertModeChineseAfterRegex = insertModeChineseAfterRegexField?.text ?: ""
+        settings.insertModeCapsBeforeRegex = insertModeCapsBeforeRegexField?.text ?: ""
+        settings.insertModeCapsAfterRegex = insertModeCapsAfterRegexField?.text ?: ""
+        settings.logError = logErrorCheckBox?.isSelected ?: true
+        settings.logWarn = logWarnCheckBox?.isSelected ?: true
+        settings.logInfo = logInfoCheckBox?.isSelected ?: true
+        settings.logDebug = logDebugCheckBox?.isSelected ?: false
     }
 
     override fun reset() {
@@ -164,9 +316,14 @@ class RimeVimSettingsConfigurable : Configurable {
         englishColorPanel?.selectedColor = decodeColor(settings.englishColor)
         chineseColorPanel?.selectedColor = decodeColor(settings.chineseColor)
         capsLockColorPanel?.selectedColor = decodeColor(settings.capsLockColor)
-        insertModeAsciiRegexField?.text = settings.insertModeAsciiRegex
-        insertModeCapsRegexField?.text = settings.insertModeCapsRegex
-        insertModeLowerRegexField?.text = settings.insertModeLowerRegex
+        insertModeChineseBeforeRegexField?.text = settings.insertModeChineseBeforeRegex
+        insertModeChineseAfterRegexField?.text = settings.insertModeChineseAfterRegex
+        insertModeCapsBeforeRegexField?.text = settings.insertModeCapsBeforeRegex
+        insertModeCapsAfterRegexField?.text = settings.insertModeCapsAfterRegex
+        logErrorCheckBox?.isSelected = settings.logError
+        logWarnCheckBox?.isSelected = settings.logWarn
+        logInfoCheckBox?.isSelected = settings.logInfo
+        logDebugCheckBox?.isSelected = settings.logDebug
     }
 
     private fun toHex(color: java.awt.Color): String {
@@ -178,6 +335,154 @@ class RimeVimSettingsConfigurable : Configurable {
             java.awt.Color.decode(hex)
         } catch (e: Exception) {
             java.awt.Color(0x00CC66)
+        }
+    }
+
+    /**
+     * 检测当前配置状态并显示结果
+     */
+    private fun testConfiguration() {
+        val sb = StringBuilder()
+        val settings = try {
+            RimeVimSettings.instance
+        } catch (e: Exception) {
+            configStatusArea?.text = "配置加载失败: ${e.message}"
+            return
+        }
+
+        sb.append("=== 配置状态检测 ===\n\n")
+
+        // 1. 插件启用状态
+        sb.append("插件启用: ${if (settings.enabled) "是" else "否"}\n")
+
+        // 2. WeaselServer 路径
+        val pathText = pathField?.text?.trim() ?: ""
+        if (pathText.isBlank()) {
+            val detected = WeaselPathDetector.detect()
+            if (detected != null) {
+                sb.append("WeaselServer: 未配置 (自动检测: $detected)\n")
+            } else {
+                sb.append("WeaselServer: 未配置，自动检测失败\n")
+            }
+        } else {
+            val file = File(pathText)
+            if (file.isFile) {
+                sb.append("WeaselServer: $pathText (有效)\n")
+            } else if (file.isDirectory) {
+                sb.append("WeaselServer: $pathText (错误: 是目录，不是文件)\n")
+            } else {
+                sb.append("WeaselServer: $pathText (错误: 文件不存在)\n")
+            }
+        }
+
+        // 3. IME 当前状态
+        try {
+            val imeState = ImeStateDetector.getCurrentState()
+            sb.append("当前 IME 状态: ${if (imeState.isAsciiMode) "英文(ASCII)" else "中文"}, CapsLock: ${if (imeState.isCapsLock) "开" else "关"}\n")
+        } catch (e: Exception) {
+            sb.append("IME 状态检测失败: ${e.message}\n")
+        }
+
+        // 4. 日志开关
+        sb.append("日志: E=${settings.logError} W=${settings.logWarn} I=${settings.logInfo} D=${settings.logDebug}\n")
+
+        // 5. 正则规则
+        sb.append("\n=== 自动切换规则 ===\n")
+        sb.append("中文(前): ${settings.insertModeChineseBeforeRegex}\n")
+        sb.append("中文(后): ${settings.insertModeChineseAfterRegex}\n")
+        sb.append("大写(前): ${settings.insertModeCapsBeforeRegex}\n")
+        sb.append("大写(后): ${settings.insertModeCapsAfterRegex}\n")
+
+        // 6. 验证正则语法
+        sb.append("\n=== 正则语法检查 ===\n")
+        validateRegex(sb, "中文(前)", settings.insertModeChineseBeforeRegex)
+        validateRegex(sb, "中文(后)", settings.insertModeChineseAfterRegex)
+        validateRegex(sb, "大写(前)", settings.insertModeCapsBeforeRegex)
+        validateRegex(sb, "大写(后)", settings.insertModeCapsAfterRegex)
+
+        configStatusArea?.text = sb.toString()
+    }
+
+    /**
+     * 验证正则表达式语法
+     */
+    private fun validateRegex(sb: StringBuilder, name: String, pattern: String) {
+        if (pattern.isBlank()) {
+            sb.append("$name: (空)\n")
+            return
+        }
+        try {
+            Pattern.compile(pattern)
+            sb.append("$name: 语法正确\n")
+        } catch (e: Exception) {
+            sb.append("$name: 语法错误 - ${e.message}\n")
+        }
+    }
+
+    /**
+     * 测试正则规则匹配（使用独立的光标前/后文本框）
+     */
+    private fun testRegex() {
+        val before = regexBeforeField?.text ?: ""
+        val after = regexAfterField?.text ?: ""
+
+        if (before.isBlank() && after.isBlank()) {
+            regexResultArea?.text = "请输入光标前或光标后的测试文本"
+            return
+        }
+
+        val settings = try {
+            RimeVimSettings.instance
+        } catch (e: Exception) {
+            regexResultArea?.text = "配置加载失败: ${e.message}"
+            return
+        }
+
+        val sb = StringBuilder()
+        sb.append("光标前: \"$before\"\n")
+        sb.append("光标后: \"$after\"\n\n")
+
+        // 测试中文规则（前）- 匹配 before 文本
+        testRegexMatch(sb, "中文规则(前)", settings.insertModeChineseBeforeRegex, before)
+        // 测试中文规则（后）- 匹配 after 文本
+        testRegexMatch(sb, "中文规则(后)", settings.insertModeChineseAfterRegex, after)
+        // 测试大写规则（前）- 匹配 before 文本
+        testRegexMatch(sb, "大写规则(前)", settings.insertModeCapsBeforeRegex, before)
+        // 测试大写规则（后）- 匹配 after 文本
+        testRegexMatch(sb, "大写规则(后)", settings.insertModeCapsAfterRegex, after)
+
+        sb.append("\n匹配结果: ")
+        val chineseBeforeMatch = matches(settings.insertModeChineseBeforeRegex, before)
+        val chineseAfterMatch = matches(settings.insertModeChineseAfterRegex, after)
+        val capsBeforeMatch = matches(settings.insertModeCapsBeforeRegex, before)
+        val capsAfterMatch = matches(settings.insertModeCapsAfterRegex, after)
+
+        if (chineseBeforeMatch || chineseAfterMatch) {
+            sb.append("中文模式")
+        } else if (capsBeforeMatch || capsAfterMatch) {
+            sb.append("大写模式")
+        } else {
+            sb.append("英文模式(默认)")
+        }
+
+        regexResultArea?.text = sb.toString()
+    }
+
+    private fun testRegexMatch(sb: StringBuilder, name: String, pattern: String, text: String) {
+        if (pattern.isBlank()) {
+            sb.append("$name: (未设置)\n")
+            return
+        }
+        val matched = matches(pattern, text)
+        sb.append("$name: ${if (matched) "匹配" else "不匹配"}\n")
+    }
+
+    private fun matches(pattern: String, text: String): Boolean {
+        if (pattern.isBlank()) return false
+        return try {
+            Pattern.compile(pattern).matcher(text).find()
+        } catch (e: Exception) {
+            false
         }
     }
 }

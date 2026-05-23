@@ -1,7 +1,8 @@
 package com.rimevim.caret
 
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.CaretVisualAttributes.Weight
+import com.intellij.openapi.editor.CaretVisualAttributes
+import com.intellij.openapi.editor.ex.EditorEx
 import com.rimevim.settings.RimeVimSettings
 import java.awt.Color
 
@@ -22,12 +23,19 @@ object CaretColorManager {
         }
 
         editor.caretModel.allCarets.forEach { caret ->
-            val attributes = com.intellij.openapi.editor.CaretVisualAttributes(
+            // 获取当前光标属性，只修改颜色，保留原有形状/粗细/厚度等设置
+            val currentAttributes = caret.visualAttributes
+            val newAttributes = CaretVisualAttributes(
                 color,
-                Weight.NORMAL
+                currentAttributes.weight,
+                currentAttributes.shape,
+                currentAttributes.thickness
             )
-            caret.setVisualAttributes(attributes)
+            caret.setVisualAttributes(newAttributes)
         }
+
+        // 强制光标立即刷新（使用重绘而非 setCaretVisible，避免干扰 IdeaVim 的光标形状设置）
+        editor.contentComponent.repaint()
     }
 
     private fun parseColor(hex: String?, default: Color): Color {

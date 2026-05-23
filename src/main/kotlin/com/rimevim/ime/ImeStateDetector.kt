@@ -50,12 +50,36 @@ object ImeStateDetector {
     )
 
     /**
-     * 检测 Rime 是否正在中文输入（IME 窗口打开且处于中文模式）
-     * 使用 WM_IME_CONTROL + IMC_GETOPENSTATUS 消息
+     * 检测 Rime 是否正在中文输入
+     * 优先使用 RimeStateFileWatcher 的文件状态（来自 Lua 脚本的 context.is_composing）
+     * 回退到 JNA 检测（当文件状态不可用时）
      * 返回 true 时表示正在中文输入，此时应跳过自动切换
      * 返回 false 时表示：未输入、或英文输入（可安全切换）
      */
     fun isComposing(): Boolean {
+        // 优先使用文件状态（最准确，来自 Rime Lua 脚本）
+        return try {
+            val watcher = ApplicationManager.getApplication()
+                .getService(RimeStateFileWatcher::class.java)
+            if (watcher != null) {
+                val composing = watcher.isComposing
+                thisLogger().debug("isComposing from file watcher: $composing")
+                composing
+            } else {
+                // 回退到 JNA 检测
+                thisLogger().debug("RimeStateFileWatcher not available, falling back to JNA detection")
+                isComposingViaJna()
+            }
+        } catch (e: Exception) {
+            thisLogger().debug("Failed to get composing state from watcher: ${e.message}, falling back to JNA")
+            isComposingViaJna()
+        }
+    }
+
+    /**
+     * 通过 JNA 检测 IME composing 状态（回退方案）
+     */
+    private fun isComposingViaJna(): Boolean {
         val user32 = MyUser32.INSTANCE
         val imm32 = Imm32.INSTANCE
 
@@ -97,7 +121,7 @@ object ImeStateDetector {
             // 只有中文 composing 时才跳过切换
             isChineseMode
         } catch (e: Exception) {
-            thisLogger().debug("Failed to detect IME composing state: ${e.message}")
+            thisLogger().debug("Failed to detect IME composing state via JNA: ${e.message}")
             false
         }
     }

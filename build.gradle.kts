@@ -1,10 +1,10 @@
-// D:\ai_code\RimeVimIME\build.gradle.kts
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+﻿// JAVA_HOME = D:\Program Files\Java\java-21
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "1.9.22"
-    id("org.jetbrains.intellij") version "1.17.2"
+    id("org.jetbrains.kotlin.jvm") version "2.3.0"
+    id("org.jetbrains.intellij.platform") version "2.8.0"
 }
 
 group = property("pluginGroup")!!
@@ -12,30 +12,49 @@ version = property("pluginVersion")!!
 
 repositories {
     mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 dependencies {
-    implementation("net.java.dev.jna:jna:5.14.0")
-    implementation("net.java.dev.jna:jna-platform:5.14.0")
+    // JNA 用于 Windows API 调用
+    compileOnly("net.java.dev.jna:jna:5.14.0")
+    compileOnly("net.java.dev.jna:jna-platform:5.14.0")
+    
+    intellijPlatform {
+        phpstorm("2026.1")
+        plugins("IdeaVIM:2.35.2")
+        pluginVerifier()
+        zipSigner()
+    }
+    
+    // 测试依赖
+    testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-intellij {
-    version.set("2024.1")
-    type.set("IC")
-    plugins.set(listOf())
+intellijPlatform {
+    pluginConfiguration {
+        version.set("${project.version}")
+        ideaVersion {
+            sinceBuild.set("261")
+            untilBuild.set("261.*")
+        }
+    }
 }
 
 tasks {
-    withType<JavaCompile> {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
+    compileKotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
-    withType<KotlinCompile> {
-        kotlinOptions.jvmTarget = "17"
+    compileJava {
+        options.release.set(17)
     }
-    patchPluginXml {
-        version.set("${project.version}")
-        sinceBuild.set("241")
-        untilBuild.set("243.*")
+    
+    test {
+        useJUnitPlatform()
     }
 }
