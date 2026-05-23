@@ -1,14 +1,14 @@
 <idea-plugin>
-    <id>com.rimevim.ime</id>
-    <name>RimeVim IME</name>
-    <vendor email="user@example.com" url="https://github.com/user/RimeVimIME">RimeVim</vendor>
+    <id>com.auto_switch_ime</id>
+    <name>自动切换输入</name>
+    <vendor email="user@example.com" url="https://github.com/user/AutoSwitchIME">AutoSwitchIME</vendor>
 
     <description><![CDATA[
-    Auto-switch IME (Rime/Weasel) based on Vim mode.
+    根据 Vim 模式自动切换输入法中英文状态（Rime/Weasel）。
     <ul>
-      <li>Normal mode → English (ASCII)</li>
-      <li>Insert mode → Chinese</li>
-      <li>Cursor color indicates IME state</li>
+      <li>Normal 模式 → 英文 (ASCII)</li>
+      <li>Insert 模式 → 中文</li>
+      <li>光标颜色指示 IME 状态</li>
     </ul>
     ]]></description>
 
@@ -18,16 +18,16 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationConfigurable
                 parentId="tools"
-                instance="com.rimevim.settings.RimeVimSettingsConfigurable"
-                id="com.rimevim.settings.RimeVimSettingsConfigurable"
-                displayName="RimeVim IME"/>
+                instance="com.auto_switch_ime.settings.AutoSwitchIMESettingsConfigurable"
+                id="com.auto_switch_ime.settings.AutoSwitchIMESettingsConfigurable"
+                displayName="自动切换输入"/>
         <applicationService
-                serviceImplementation="com.rimevim.settings.RimeVimSettings"/>
-        <postStartupActivity implementation="com.rimevim.RimeVimPlugin"/>
+                serviceImplementation="com.auto_switch_ime.settings.AutoSwitchIMESettings"/>
+        <postStartupActivity implementation="com.auto_switch_ime.AutoSwitchIMEPlugin"/>
     </extensions>
 
     <applicationListeners>
-        <listener class="com.rimevim.listener.VimModeListener"
+        <listener class="com.auto_switch_ime.listener.VimModeListener"
                   topic="com.intellij.openapi.editor.EditorFactoryListener"/>
     </applicationListeners>
 </idea-plugin>

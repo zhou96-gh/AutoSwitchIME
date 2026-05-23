@@ -1,4 +1,4 @@
-# RimeVimIME - AGENTS.md
+# AutoSwitchIME - AGENTS.md
 
 > ⚠️ 详细 agent 配置已迁移到 `.opencode/agents/` 目录，本文档保留核心快速参考。
 
@@ -28,13 +28,13 @@ IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英
 - **IdeaVim**: 2.35.2
 - **构建**: `.\gradlew.bat build`
 - **运行**: `.\gradlew.bat runIde`
-- **输出**: `build/distributions/RimeVimIME-<version>.zip` (~77 KB)
+- **输出**: `build/distributions/AutoSwitchIME-<version>.zip` (~77 KB)
 
 ## 版本更新流程（每次发版必须执行）
 
 1. **修改版本号**：编辑 `gradle.properties` 中的 `pluginVersion`
 2. **构建插件包**：`$env:JAVA_HOME="D:\Program Files\Java\java-21"; .\gradlew.bat clean buildPlugin -x buildSearchableOptions`
-3. **验证产物**：确认 `build\distributions\RimeVimIME-<新版本>.zip` 存在且大小合理
+3. **验证产物**：确认 `build\distributions\AutoSwitchIME-<新版本>.zip` 存在且大小合理
 4. **同步 Lua 脚本**：如有修改，复制 `lua\rimevim_bridge.lua` 到 `%APPDATA%\Rime\lua\rimevim_bridge.lua`
 5. **记录变更**：在 `.opencode/agents/issues.md` 或提交消息中记录版本变更内容
 

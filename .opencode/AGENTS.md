@@ -1,4 +1,4 @@
-# RimeVimIME - 主索引
+# AutoSwitchIME - 主索引
 
 IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。
 
@@ -31,7 +31,7 @@ IntelliJ 插件 + VSCode 扩展：Vim 模式切换时自动切换输入法中英
 
 1. 修改 `gradle.properties` 中的 `pluginVersion`
 2. `$env:JAVA_HOME="D:\Program Files\Java\java-21"; .\gradlew.bat clean buildPlugin -x buildSearchableOptions`
-3. 验证产物 `build\distributions\RimeVimIME-<version>.zip`
+3. 验证产物 `build\distributions\AutoSwitchIME-<version>.zip`
 4. 同步 Lua 脚本到 `%APPDATA%\Rime\lua\rimevim_bridge.lua`
 5. 更新 `agents/issues.md` 记录变更
 

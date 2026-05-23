@@ -22,7 +22,7 @@ $env:JAVA_HOME="D:\Program Files\Java\java-21"
 
 ## 构建输出
 
-- 产物: `build/distributions/RimeVimIME-1.0.0.zip`
+- 产物: `build/distributions/AutoSwitchIME-<version>.zip`
 - 大小: ~77 KB
 - 最后状态: `BUILD SUCCESSFUL` (14 tasks executed)
 
@@ -34,9 +34,9 @@ $env:JAVA_HOME="D:\Program Files\Java\java-21"
 ## gradle.properties
 
 ```properties
-pluginVersion=1.0.0
-pluginGroup=com.rimevim
-pluginName=RimeVim IME
+pluginVersion=1.1.0
+pluginGroup=com.autoswitchime
+pluginName=自动切换输入
 kotlin.stdlib.default.dependency=false
 ```
 

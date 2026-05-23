@@ -1,5 +1,5 @@
 <idea-plugin>
     <extensions defaultExtensionNs="IdeaVIM">
-        <vimExtension implementation="com.rimevim.RimeVimExtension" name="rimevim-ime"/>
+        <vimExtension implementation="com.auto_switch_ime.AutoSwitchIMEExtension" name="auto_switch_ime"/>
     </extensions>
 </idea-plugin>

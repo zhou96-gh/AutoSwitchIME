@@ -1,10 +1,10 @@
 -- lua/rimevim_bridge.lua
--- RimeVim IME 桥接脚本：检测输入法状态变化并写入文件，通知 IntelliJ 插件
+-- AutoSwitchIME 桥接脚本：检测输入法状态变化并写入文件，通知编辑器插件
 --
 -- 安装方法：
 -- 1. 将此文件复制到 Rime 用户目录的 lua 子目录（%APPDATA%\Rime\lua\）
 -- 2. 在 rime_ice.custom.yaml 中添加：
---    "engine/processors/@before 0": lua_processor@*rimevim_bridge
+--    "engine/processors/@before 0": lua_processor@*auto_switch_ime_bridge
 -- 3. 重新部署 Rime
 
 local M = {}
@@ -15,13 +15,13 @@ local XK_Caps_Lock = 0xffe5
 -- 日志辅助函数
 local function log_info(msg)
     if log and log.info then
-        log.info("[rimevim_bridge] " .. msg)
+        log.info("[auto_switch_ime_bridge] " .. msg)
     end
 end
 
 local function log_warn(msg)
     if log and log.warning then
-        log.warning("[rimevim_bridge] " .. msg)
+        log.warning("[auto_switch_ime_bridge] " .. msg)
     end
 end
 
@@ -44,7 +44,7 @@ local function write_state(env, ascii_mode, caps_lock, is_composing)
         return
     end
 
-    local state_file = temp_dir .. "\\rimevim-state.json"
+    local state_file = temp_dir .. "\\ime-state-rime.json"
 
     log_info("Writing state: ascii_mode=" .. tostring(ascii_mode) .. ", caps_lock=" .. tostring(caps_lock) .. ", is_composing=" .. tostring(is_composing))
 
