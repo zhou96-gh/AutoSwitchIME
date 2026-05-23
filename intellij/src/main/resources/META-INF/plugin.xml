@@ -1,0 +1,33 @@
+<idea-plugin>
+    <id>com.rimevim.ime</id>
+    <name>RimeVim IME</name>
+    <vendor email="user@example.com" url="https://github.com/user/RimeVimIME">RimeVim</vendor>
+
+    <description><![CDATA[
+    Auto-switch IME (Rime/Weasel) based on Vim mode.
+    <ul>
+      <li>Normal mode → English (ASCII)</li>
+      <li>Insert mode → Chinese</li>
+      <li>Cursor color indicates IME state</li>
+    </ul>
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="ideavim-integration.xml">IdeaVIM</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationConfigurable
+                parentId="tools"
+                instance="com.rimevim.settings.RimeVimSettingsConfigurable"
+                id="com.rimevim.settings.RimeVimSettingsConfigurable"
+                displayName="RimeVim IME"/>
+        <applicationService
+                serviceImplementation="com.rimevim.settings.RimeVimSettings"/>
+        <postStartupActivity implementation="com.rimevim.RimeVimPlugin"/>
+    </extensions>
+
+    <applicationListeners>
+        <listener class="com.rimevim.listener.VimModeListener"
+                  topic="com.intellij.openapi.editor.EditorFactoryListener"/>
+    </applicationListeners>
+</idea-plugin>
