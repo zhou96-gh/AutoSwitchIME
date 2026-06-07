@@ -102,16 +102,6 @@ function M.func(key, env)
         log_info("CapsLock toggled by key: " .. tostring(env.caps_lock))
     end
 
-    local mod = key.modifier
-    if type(mod) == "number" and mod >= 2 then
-        local caps_from_mod = (mod % 4) >= 2
-        if caps_from_mod ~= env.caps_lock then
-            env.caps_lock = caps_from_mod
-            caps_changed = true
-            log_info("CapsLock from modifier: " .. tostring(env.caps_lock))
-        end
-    end
-
     local context = env.engine.context
     if not context then
         return 2
