@@ -1,0 +1,112 @@
+{
+  "name": "auto-switch-ime",
+  "displayName": "Auto Switch IME",
+  "description": "Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示",
+  "version": "2.1.1",
+  "publisher": "auto-switch-ime",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Auto Switch IME",
+      "properties": {
+        "autoSwitchIME.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用自动切换输入法"
+        },
+        "autoSwitchIME.imeType": {
+          "type": "string",
+          "default": "rime",
+          "enum": [
+            "rime",
+            "sogou",
+            "ms_pinyin",
+            "custom"
+          ],
+          "description": "输入法类型"
+        },
+        "autoSwitchIME.weaselServerPath": {
+          "type": "string",
+          "default": "",
+          "description": "WeaselServer.exe 路径（留空自动检测）"
+        },
+        "autoSwitchIME.customSwitchScript": {
+          "type": "string",
+          "default": "",
+          "description": "自定义切换脚本路径（仅 custom 类型）"
+        },
+        "autoSwitchIME.chineseBeforeRegex": {
+          "type": "string",
+          "default": ".*[\\u4e00-\\u9fa5]$",
+          "description": "光标前的中文触发正则"
+        },
+        "autoSwitchIME.chineseAfterRegex": {
+          "type": "string",
+          "default": "^[\\u4e00-\\u9fa5].*",
+          "description": "光标后的中文触发正则"
+        },
+        "autoSwitchIME.capsBeforeRegex": {
+          "type": "string",
+          "default": ".*[A-Z]{2,}[0-9_]?$",
+          "description": "光标前的大写触发正则"
+        },
+        "autoSwitchIME.capsAfterRegex": {
+          "type": "string",
+          "default": "^[A-Z][0-9_]?.*",
+          "description": "光标后的大写触发正则"
+        },
+        "autoSwitchIME.caretDebounceMs": {
+          "type": "number",
+          "default": 50,
+          "description": "光标移动防抖延迟（毫秒）"
+        },
+        "autoSwitchIME.chineseCaretColor": {
+          "type": "string",
+          "default": "#00FF00",
+          "description": "中文模式光标颜色"
+        },
+        "autoSwitchIME.englishCaretColor": {
+          "type": "string",
+          "default": "#FFFFFF",
+          "description": "英文模式光标颜色"
+        },
+        "autoSwitchIME.capsCaretColor": {
+          "type": "string",
+          "default": "#FFFF00",
+          "description": "大写模式光标颜色"
+        },
+        "autoSwitchIME.showStatusBarIndicator": {
+          "type": "boolean",
+          "default": true,
+          "description": "在状态栏显示当前输入法模式"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "koffi": "^3.0.2"
+  }
+}
