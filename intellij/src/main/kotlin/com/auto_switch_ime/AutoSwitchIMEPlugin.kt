@@ -12,17 +12,21 @@ import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.util.Alarm
 import com.auto_switch_ime.caret.CaretColorManager
 import com.auto_switch_ime.core.ImeAction
+import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.ime.ImeStateDetector
+import com.auto_switch_ime.core.ime.NativeImeSys
+import com.auto_switch_ime.core.rules.RuleEvaluator
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.ime.AutoSwitchIMEStateWatcher
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
+import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
 import com.auto_switch_ime.util.VimModeChecker
-import java.util.regex.Pattern
 
 /**
  * 插件入口点：IDE 启动时注册编辑器监听器
@@ -33,15 +37,13 @@ import java.util.regex.Pattern
  */
 class AutoSwitchIMEPlugin : ProjectActivity {
 
-    // Regex pattern cache – avoid Pattern.compile() on every caret move
-    private val regexCache = HashMap<String, Pattern>(4)
-
     // Cached service references – avoid getService() reflection lookup on every call
     private var cachedController: AutoSwitchIMEController? = null
     private var cachedStateWatcher: AutoSwitchIMEStateWatcher? = null
 
     // Debounce alarm for caretPositionChanged – coalesce rapid h/j/k/l key repeats
-    // Initialized in execute() with project as Disposable parent (required for non-Swing thread)
+    // 独立 Disposable 做 parent：不注册到 project，避免 Project 关闭时 Alarm 同步 dispose 导致 "Already disposed"
+    private val alarmParentDisposable = Disposer.newDisposable("AutoSwitchIME-CaretAlarm")
     private lateinit var caretDebounceAlarm: Alarm
     @Volatile
     private var lastCaretEditor: Editor? = null
@@ -50,6 +52,8 @@ class AutoSwitchIMEPlugin : ProjectActivity {
         try {
             AutoSwitchIMELogger.info("AutoSwitchIME IME plugin starting...")
 
+            NativeImeSys.load(AutoSwitchIMELogger)
+
             val settings = AutoSwitchIMESettings.instance
 
             if (!settings.enabled) {
@@ -57,13 +61,29 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                 return
             }
 
-            // 初始化防抖 Alarm（必须传入 Disposable parent，非 Swing 线程要求）
-            caretDebounceAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, project)
+            // 初始化防抖 Alarm（独立 parent disposable，确保 Alarm 在 Project 关闭期间仍可用）
+            caretDebounceAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, alarmParentDisposable)
 
             // 启动 Rime 状态文件监听器（通过 Service 获取并缓存）
             cachedStateWatcher = ApplicationManager.getApplication().getService(AutoSwitchIMEStateWatcher::class.java)
             cachedStateWatcher?.start()
             AutoSwitchIMELogger.info("AutoSwitchIMEStateWatcher started for manual IME switching detection")
+
+            // 状态文件变化回调：实际 IME 状态变化时更新颜色
+            val ctrl = ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
+            if (ctrl != null) {
+                ctrl.onStateChanged = { state: ImeState ->
+                    ActionDeduplicator.invalidate()
+                    ApplicationManager.getApplication().invokeLater {
+                        val editors = EditorFactory.getInstance().allEditors
+                        for (editor in editors) {
+                            if (!editor.isDisposed) {
+                                CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
+                            }
+                        }
+                    }
+                }
+            }
 
             AutoSwitchIMELogger.info("AutoSwitchIME IME initialized for project: ${project.name}")
 
@@ -95,6 +115,7 @@ class AutoSwitchIMEPlugin : ProjectActivity {
         // 监听文档变化（输入时更新状态）
         editorFactory.eventMulticaster.addDocumentListener(object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
+                if (project.isDisposed) return
                 val editor = EditorFactory.getInstance().allEditors.firstOrNull { it.document == event.document }
                     ?: return
                 if (editor.isDisposed) return
@@ -110,32 +131,37 @@ class AutoSwitchIMEPlugin : ProjectActivity {
         editorFactory.eventMulticaster.addCaretListener(object : CaretListener {
             override fun caretPositionChanged(event: CaretEvent) {
                 val editor = event.editor
-                if (editor.isDisposed) return
+                if (editor.isDisposed || project.isDisposed) return
 
                 lastCaretEditor = editor
-                caretDebounceAlarm.cancelAllRequests()
-                caretDebounceAlarm.addRequest({
-                    val currentEditor = lastCaretEditor
-                    if (currentEditor != null && !currentEditor.isDisposed) {
-                        ApplicationManager.getApplication().invokeLater {
-                            if (!currentEditor.isDisposed) {
-                                updateEditorState(currentEditor)
+                if (!::caretDebounceAlarm.isInitialized) return
+                try {
+                    caretDebounceAlarm.cancelAllRequests()
+                    caretDebounceAlarm.addRequest({
+                        val currentEditor = lastCaretEditor
+                        if (currentEditor != null && !currentEditor.isDisposed) {
+                            ApplicationManager.getApplication().invokeLater {
+                                if (!currentEditor.isDisposed) {
+                                    updateEditorState(currentEditor)
+                                }
                             }
                         }
-                    }
-                }, 50)
+                    }, 50)
+                } catch (_: Exception) {
+                    // Alarm already disposed (race condition during project shutdown)
+                }
             }
         }, project)
     }
 
     /**
-     * 更新编辑器状态
-     * 无 IdeaVim 时：按 Insert 模式处理，使用正则规则切换输入法并更新光标颜色
-     * 有 IdeaVim 时：Normal/Visual 模式仅更新光标颜色，Insert/Replace 模式也执行输入法切换
+     * 更新编辑器状态 — 只需切换输入法，颜色由状态文件回调自动更新
+     *
+     * 无 IdeaVim 时：按 Insert 模式处理，使用正则规则切换输入法
+     * 有 IdeaVim 时：Normal/Visual 模式仅切换，Insert/Replace 模式也执行输入法切换
      *
      * 注意：
      * - Rime 正在输入（显示候选词窗口）时跳过输入法切换
-     * - IME 切换后同步更新光标颜色
      */
     private fun updateEditorState(editor: Editor) {
         if (!AutoSwitchIMESettings.instance.enabled) return
@@ -157,78 +183,57 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                     return@invokeLater
                 }
 
-            // 检测 Rime 是否正在输入（显示候选词窗口）
-            val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
-            if (isComposing) {
-                AutoSwitchIMELogger.debug("Rime is composing, skipping IME switch")
+            if (!controller.getTrackedState().isAsciiMode) {
+                val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
+                if (isComposing) {
+                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: Rime is composing, skipping IME switch")
+                    val state = controller.getTrackedState()
+                    CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
+                    return@invokeLater
+                }
             }
 
-            // 目标状态（用于切换 IME 后更新光标颜色）
-            var targetAscii = true
-            var targetCaps = false
-            var targetKnown = true
-
-            // 统一逻辑：仅检查是否处于 Normal 模式，其他默认 Insert 模式
             if (VimModeChecker.isInNormalMode()) {
-                // Normal/Visual/Select 模式：强制切换英文
-                AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Normal mode): forcing ASCII (English)")
-                if (!isComposing) {
-                    controller.setAsciiMode(true)
+                if (ActionDeduplicator.shouldSkip(editor, ImeAction.ENGLISH)) {
+                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: duplicated English action skipped")
+                    return@invokeLater
                 }
-                targetAscii = true
-                targetCaps = false
+                AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Normal mode): forcing ASCII (English)")
+                controller.setAsciiMode(true)
+                CaretColorManager.updateCaretColor(editor, true, false)
             } else {
-                // Insert 模式（或无 IdeaVim）：执行正则规则评估
                 val (before, after) = getLineContextText(editor)
                 val settings = AutoSwitchIMESettings.instance
                 val action = evaluateInsertModeRules(before, after, settings)
+                if (ActionDeduplicator.shouldSkip(editor, action)) {
+                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: duplicated $action action skipped")
+                    return@invokeLater
+                }
 
-                // 正在 composing 时，只跳过切到英文的动作（避免干扰候选词窗口）
-                // 切到中文/大写不会造成干扰（中文大概率已是中文，大写不影响输入法）
-                if (isComposing && action == ImeAction.ENGLISH) {
-                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Insert mode): composing, skip switch to English")
-                } else {
-                    when (action) {
-                        ImeAction.CHINESE -> {
-                            AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Chinese mode")
-                            controller.setAsciiMode(false)
-                            targetAscii = false
-                            targetCaps = false
-                        }
-                        ImeAction.CAPS -> {
-                            AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Caps mode")
-                            controller.setCapsMode()
-                            targetAscii = false
-                            targetCaps = true
-                        }
-                        ImeAction.ENGLISH -> {
-                            AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): English mode")
-                            controller.setAsciiMode(true)
-                            targetAscii = true
-                            targetCaps = false
-                        }
-                        ImeAction.UNCHANGED -> {
-                            AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Insert mode): IME unchanged")
-                            targetKnown = false
-                        }
+                when (action) {
+                    ImeAction.CHINESE -> {
+                        AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Chinese mode")
+                        controller.setAsciiMode(false)
+                        CaretColorManager.updateCaretColor(editor, false, false)
+                    }
+                    ImeAction.CAPS -> {
+                        AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Caps mode")
+                        controller.setCapsMode()
+                        CaretColorManager.updateCaretColor(editor, true, true)
+                    }
+                    ImeAction.ENGLISH -> {
+                        AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): English mode")
+                        controller.setAsciiMode(true)
+                        CaretColorManager.updateCaretColor(editor, true, false)
+                    }
+                    ImeAction.UNCHANGED -> {
+                        AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Insert mode): IME unchanged")
                     }
                 }
-            }
-
-            // 同步更新光标颜色
-            if (targetKnown) {
-                CaretColorManager.updateCaretColor(editor, targetAscii, targetCaps)
-            } else {
-                val state = ImeStateDetector.getCurrentState(controller.stateWatcher, controller.getTrackedState())
-                CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
             }
         }
     }
 
-    /**
-     * 获取光标所在行的上下文文本（不跨行）
-     * @return Pair(光标前文本，光标后文本)
-     */
     private fun getLineContextText(editor: Editor): Pair<String, String> {
         try {
             val document = editor.document
@@ -259,39 +264,14 @@ class AutoSwitchIMEPlugin : ProjectActivity {
         after: String,
         settings: AutoSwitchIMESettings
     ): ImeAction {
-        // 1. 检查中文规则：前后任一匹配
-        val chineseBeforeMatch = matchesRegex(settings.insertModeChineseBeforeRegex, before)
-        val chineseAfterMatch = matchesRegex(settings.insertModeChineseAfterRegex, after)
-        if (chineseBeforeMatch || chineseAfterMatch) {
-            AutoSwitchIMELogger.debug("Chinese regex matched (before='$before' or after='$after')")
-            return ImeAction.CHINESE
-        }
-
-        // 2. 检查大写规则：前后任一匹配
-        val capsBeforeMatch = matchesRegex(settings.insertModeCapsBeforeRegex, before)
-        val capsAfterMatch = matchesRegex(settings.insertModeCapsAfterRegex, after)
-        if (capsBeforeMatch || capsAfterMatch) {
-            AutoSwitchIMELogger.debug("Caps regex matched (before='$before' or after='$after')")
-            return ImeAction.CAPS
-        }
-
-        // 默认：英文模式
-        AutoSwitchIMELogger.debug("No regex matched before/after, defaulting to English")
-        return ImeAction.ENGLISH
-    }
-
-    /**
-     * 检查正则是否匹配（空规则视为匹配），复用已编译的 Pattern 避免重复编译
-     */
-    private fun matchesRegex(pattern: String, text: String): Boolean {
-        if (pattern.isBlank()) return true
-        return try {
-            val compiled = regexCache.getOrPut(pattern) { Pattern.compile(pattern) }
-            compiled.matcher(text).find()
-        } catch (e: Exception) {
-            AutoSwitchIMELogger.warn("Invalid regex: $pattern", e)
-            false
-        }
+        return RuleEvaluator.evaluate(
+            before = before,
+            after = after,
+            chineseBeforeRegex = settings.insertModeChineseBeforeRegex,
+            chineseAfterRegex = settings.insertModeChineseAfterRegex,
+            capsBeforeRegex = settings.insertModeCapsBeforeRegex,
+            capsAfterRegex = settings.insertModeCapsAfterRegex
+        )
     }
 
     /**

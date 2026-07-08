@@ -1,0 +1,29 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - http_proxy=${http_proxy:-}
+        - https_proxy=${https_proxy:-}
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+    image: rimevim-dev:latest
+    container_name: rimevim-dev
+    hostname: rimevim-dev
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    init: true
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+      - npm-cache:/root/.npm
+      - cargo-cache:/root/.cargo
+      - rustup-cache:/root/.rustup
+
+volumes:
+  gradle-cache:
+  npm-cache:
+  cargo-cache:
+  rustup-cache:

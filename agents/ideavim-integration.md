@@ -1,0 +1,43 @@
+# IdeaVim 集成
+
+## 插件依赖配置
+
+### plugin.xml
+```xml
+<depends optional="true" config-file="ideavim-integration.xml">IdeaVIM</depends>
+```
+
+插件 ID 是 `IdeaVIM`（不是 `com.maddyhome.idea.vim`）。
+
+### ideavim-integration.xml
+```xml
+<idea-plugin>
+    <vimExtension implementation="com.auto_switch_ime.AutoSwitchIMEExtension"/>
+</idea-plugin>
+```
+
+## 模式监听逻辑
+
+```kotlin
+override fun modeChanged(editor: VimEditor, oldMode: Mode) {
+    val currentMode = editor.mode
+    when (currentMode) {
+        Mode.INSERT, Mode.REPLACE -> {
+            // 正则规则评估 → 中文 / Caps / 英文
+        }
+        else -> {
+            // Normal/Visual/Select: 强制英文
+            rimeController.setAsciiMode(true)
+        }
+    }
+}
+```
+
+## 核心文件
+
+| 文件 | 路径 |
+|------|------|
+| 扩展入口 | `intellij/src/.../AutoSwitchIMEExtension.kt` |
+| 插件主入口 | `intellij/src/.../AutoSwitchIMEPlugin.kt` |
+| 监听器 | `intellij/src/.../listener/VimModeListener.kt` |
+| Vim 模式工具 | `intellij/src/.../util/VimModeChecker.kt` |

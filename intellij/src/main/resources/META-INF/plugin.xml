@@ -26,8 +26,4 @@
         <postStartupActivity implementation="com.auto_switch_ime.AutoSwitchIMEPlugin"/>
     </extensions>
 
-    <applicationListeners>
-        <listener class="com.auto_switch_ime.listener.VimModeListener"
-                  topic="com.intellij.openapi.editor.EditorFactoryListener"/>
-    </applicationListeners>
 </idea-plugin>

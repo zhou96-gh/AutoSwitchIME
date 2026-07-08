@@ -13,10 +13,11 @@ import com.maddyhome.idea.vim.state.mode.Mode
 import com.auto_switch_ime.caret.CaretColorManager
 import com.auto_switch_ime.core.ImeAction
 import com.auto_switch_ime.core.ime.ImeStateDetector
+import com.auto_switch_ime.core.rules.RuleEvaluator
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
+import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
-import java.util.regex.Pattern
 
 /**
  * IdeaVim 扩展：监听 Vim 模式变化，自动切换输入法并更新光标颜色
@@ -27,9 +28,6 @@ import java.util.regex.Pattern
  * - Insert/Replace → 评估正则规则：中文规则→中文, 大写规则→大写, 默认→英文
  */
 class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
-
-    // Regex pattern cache – avoid Pattern.compile() on every mode change
-    private val regexCache = HashMap<String, Pattern>(4)
 
     private val controller: AutoSwitchIMEController by lazy {
         ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
@@ -97,89 +95,67 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                 return@invokeLater
             }
 
-            // 编辑器未聚焦时不执行自动切换
             if (!ijEditor.contentComponent.hasFocus()) {
                 AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: editor not focused, skipping IME switch")
                 return@invokeLater
             }
 
-            // 检测 Rime 是否正在输入（显示候选词窗口）
-            val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
-            if (isComposing) {
-                AutoSwitchIMELogger.info("Rime is composing, skipping IME switch but updating caret color")
-                // 正在输入时不切换输入法，但仍根据目标状态更新光标颜色
+            if (!controller.getTrackedState().isAsciiMode) {
+                val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
+                if (isComposing) {
+                    AutoSwitchIMELogger.info("AutoSwitchIMEExtension: Rime is composing, skipping IME switch")
+                    val state = controller.getTrackedState()
+                    CaretColorManager.updateCaretColor(ijEditor, state.isAsciiMode, state.isCapsLock)
+                    return@invokeLater
+                }
             }
 
-            // 根据模式确定目标状态
-            var targetAscii = true
-            var targetCaps = false
-            var targetKnown = true  // 是否已知目标状态
-
             when (currentMode) {
-                // Normal/Visual/Select/OP_PENDING → 强制英文
                 is Mode.NORMAL, is Mode.VISUAL, is Mode.SELECT, is Mode.OP_PENDING -> {
-                    AutoSwitchIMELogger.info("Normal mode → forcing ASCII (English)")
-                    if (!isComposing) {
-                        controller.setAsciiMode(true)
+                    if (ActionDeduplicator.shouldSkip(ijEditor, ImeAction.ENGLISH)) {
+                        AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: duplicated English action skipped")
+                        return@invokeLater
                     }
-                    targetAscii = true
-                    targetCaps = false
+                    AutoSwitchIMELogger.info("Normal mode → forcing ASCII (English)")
+                    controller.setAsciiMode(true)
+                    CaretColorManager.updateCaretColor(ijEditor, true, false)
                 }
 
-                // Command-line (:) → 不变，使用当前检测状态
                 is Mode.CMD_LINE -> {
                     AutoSwitchIMELogger.debug("Command-line mode → IME unchanged")
-                    targetKnown = false
                 }
 
-                // Insert/Replace → 评估正则规则
                 is Mode.INSERT, is Mode.REPLACE -> {
                     val (before, after) = getLineContextText(ijEditor)
                     AutoSwitchIMELogger.info("Insert context: before='$before', after='$after'")
                     val settings = AutoSwitchIMESettings.instance
                     val action = evaluateInsertModeRules(before, after, settings)
+                    if (ActionDeduplicator.shouldSkip(ijEditor, action)) {
+                        AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: duplicated $action action skipped")
+                        return@invokeLater
+                    }
 
-                    // 正在 composing 时，只跳过切到英文的动作（避免干扰候选词窗口）
-                    // 切到中文/大写不会造成干扰（中文大概率已是中文，大写不影响输入法）
-                    if (isComposing && action == ImeAction.ENGLISH) {
-                        AutoSwitchIMELogger.info("Insert mode → composing, skip switch to English")
-                    } else {
-                        when (action) {
-                            ImeAction.CHINESE -> {
-                                AutoSwitchIMELogger.info("Insert mode → Chinese (regex matched)")
-                                controller.setAsciiMode(false)
-                                targetAscii = false
-                                targetCaps = false
-                            }
-                            ImeAction.CAPS -> {
-                                AutoSwitchIMELogger.info("Insert mode → Caps (regex matched)")
-                                controller.setCapsMode()
-                                targetAscii = false
-                                targetCaps = true
-                            }
-                            ImeAction.ENGLISH -> {
-                                AutoSwitchIMELogger.info("Insert mode → English (default)")
-                                controller.setAsciiMode(true)
-                                targetAscii = true
-                                targetCaps = false
-                            }
-                            ImeAction.UNCHANGED -> {
-                                AutoSwitchIMELogger.debug("Insert mode → IME unchanged")
-                                targetKnown = false
-                            }
+                    when (action) {
+                        ImeAction.CHINESE -> {
+                            AutoSwitchIMELogger.info("Insert mode → Chinese (regex matched)")
+                            controller.setAsciiMode(false)
+                            CaretColorManager.updateCaretColor(ijEditor, false, false)
+                        }
+                        ImeAction.CAPS -> {
+                            AutoSwitchIMELogger.info("Insert mode → Caps (regex matched)")
+                            controller.setCapsMode()
+                            CaretColorManager.updateCaretColor(ijEditor, true, true)
+                        }
+                        ImeAction.ENGLISH -> {
+                            AutoSwitchIMELogger.info("Insert mode → English (default)")
+                            controller.setAsciiMode(true)
+                            CaretColorManager.updateCaretColor(ijEditor, true, false)
+                        }
+                        ImeAction.UNCHANGED -> {
+                            AutoSwitchIMELogger.debug("Insert mode → IME unchanged")
                         }
                     }
                 }
-            }
-
-            // 更新光标颜色：使用已知的目标状态，避免异步读取旧状态
-            if (targetKnown) {
-                AutoSwitchIMELogger.info("Caret color: ascii=$targetAscii, caps=$targetCaps (target state)")
-                CaretColorManager.updateCaretColor(ijEditor, targetAscii, targetCaps)
-            } else {
-                val state = ImeStateDetector.getCurrentState(controller.stateWatcher, controller.getTrackedState())
-                AutoSwitchIMELogger.info("Caret color: ascii=${state.isAsciiMode}, caps=${state.isCapsLock} (detected)")
-                CaretColorManager.updateCaretColor(ijEditor, state.isAsciiMode, state.isCapsLock)
             }
         }
     }
@@ -220,39 +196,14 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
         after: String,
         settings: AutoSwitchIMESettings
     ): ImeAction {
-        // 1. 检查中文规则：前后任一匹配
-        val chineseBeforeMatch = matchesRegex(settings.insertModeChineseBeforeRegex, before)
-        val chineseAfterMatch = matchesRegex(settings.insertModeChineseAfterRegex, after)
-        if (chineseBeforeMatch || chineseAfterMatch) {
-            AutoSwitchIMELogger.debug("Chinese regex matched (before='$before' or after='$after')")
-            return ImeAction.CHINESE
-        }
-
-        // 2. 检查大写规则：前后任一匹配
-        val capsBeforeMatch = matchesRegex(settings.insertModeCapsBeforeRegex, before)
-        val capsAfterMatch = matchesRegex(settings.insertModeCapsAfterRegex, after)
-        if (capsBeforeMatch || capsAfterMatch) {
-            AutoSwitchIMELogger.debug("Caps regex matched (before='$before' or after='$after')")
-            return ImeAction.CAPS
-        }
-
-        // 默认：英文模式
-        AutoSwitchIMELogger.debug("No regex matched before/after, defaulting to English")
-        return ImeAction.ENGLISH
-    }
-
-    /**
-     * 检查正则是否匹配（空规则视为匹配），复用已编译的 Pattern 避免重复编译
-     */
-    private fun matchesRegex(pattern: String, text: String): Boolean {
-        if (pattern.isBlank()) return true
-        return try {
-            val compiled = regexCache.getOrPut(pattern) { Pattern.compile(pattern) }
-            compiled.matcher(text).find()
-        } catch (e: Exception) {
-            AutoSwitchIMELogger.warn("Invalid regex: $pattern", e)
-            false
-        }
+        return RuleEvaluator.evaluate(
+            before = before,
+            after = after,
+            chineseBeforeRegex = settings.insertModeChineseBeforeRegex,
+            chineseAfterRegex = settings.insertModeChineseAfterRegex,
+            capsBeforeRegex = settings.insertModeCapsBeforeRegex,
+            capsAfterRegex = settings.insertModeCapsAfterRegex
+        )
     }
 
     override fun dispose() {

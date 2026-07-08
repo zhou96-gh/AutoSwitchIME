@@ -8,7 +8,7 @@ import com.auto_switch_ime.core.ime.StateWatcher
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 
-@Service
+@Service(Service.Level.APP)
 class AutoSwitchIMEStateWatcher {
     private val stateWatcher = StateWatcher(
         stateFilePath = ImeConstants.getStateFilePath(ImeType.RIME),

@@ -5,10 +5,6 @@ import com.auto_switch_ime.core.util.Logger
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-/**
- * Rime/Weasel 输入法提供者
- * 实现 ImeProvider 接口，提供平台无关的 IME 切换逻辑
- */
 class RimeImeProvider(
     private val config: ImeConfig,
     private val logger: Logger
@@ -19,8 +15,8 @@ class RimeImeProvider(
     @Volatile
     private var currentAsciiMode: Boolean = true
 
-    @Volatile
-    private var currentCapsMode: Boolean = false
+    /** 状态文件变化回调 */
+    var onStateChanged: ((ImeState) -> Unit)? = null
 
     val stateWatcher: StateWatcher
     private val weaselServerPath: String?
@@ -34,60 +30,47 @@ class RimeImeProvider(
         )
     }
 
-    /**
-     * 启动状态监听
-     */
     fun start() {
         stateWatcher.start()
     }
 
-    /**
-     * 停止状态监听
-     */
     fun stop() {
         stateWatcher.stop()
     }
 
     override suspend fun setAsciiMode(ascii: Boolean) {
-        // 如果已是目标模式且非大写，跳过
-        if (currentAsciiMode == ascii && !currentCapsMode) {
-            return
+        val capsOn = NativeImeSys.imeCapsRead()
+
+        if (currentAsciiMode == ascii && !capsOn) return
+
+        if (capsOn) {
+            logger.debug("Exiting caps mode before switching IME mode")
+            NativeImeSys.imeCapsToggle()
         }
 
-        // 如果当前是大写模式且切换到英文，先退出大写
-        if (currentCapsMode && ascii) {
-            logger.debug("Exiting caps mode before switching to ASCII")
-            exitCapsMode()
-        }
+        if (currentAsciiMode == ascii) return
 
         currentAsciiMode = ascii
         switchImeMode(if (ascii) "/ascii" else "/nascii", if (ascii) "ASCII" else "Chinese")
     }
 
     override suspend fun setCapsMode() {
-        if (currentCapsMode) {
-            logger.debug("IME already in Caps mode, skipping")
-            return
+        if (currentAsciiMode && NativeImeSys.imeCapsRead()) return
+
+        // Caps 模式 = WeaselServer 英文模式 + CapsLock 开启
+        // 先确保 WeaselServer 在英文模式（/ascii），这样输出大写英文字母
+        if (!currentAsciiMode) {
+            currentAsciiMode = true
+            switchImeMode("/ascii", "ASCII")
         }
 
-        val eventsSent = CapsLockController.toggleCapsLock()
-        if (eventsSent == 2) {
-            currentCapsMode = true
-            currentAsciiMode = false
-            logger.info("Caps mode activated via SendInput ($eventsSent events)")
-        } else {
-            logger.warn("Failed to toggle CapsLock via SendInput (sent $eventsSent events)")
+        // 再开启 CapsLock
+        if (!NativeImeSys.imeCapsRead()) {
+            NativeImeSys.imeCapsToggle()
         }
-    }
 
-    private fun exitCapsMode() {
-        if (!currentCapsMode) return
-
-        val eventsSent = CapsLockController.toggleCapsLock()
-        if (eventsSent == 2) {
-            currentCapsMode = false
-            logger.info("Exited caps mode via SendInput ($eventsSent events)")
-        }
+        onStateChanged?.invoke(ImeState(true, true, stateWatcher.isComposing))
+        logger.info("Caps mode activated (ASCII + CapsLock)")
     }
 
     override suspend fun isComposing(): Boolean {
@@ -95,13 +78,11 @@ class RimeImeProvider(
     }
 
     override fun getTrackedState(): ImeState {
-        return ImeState(currentAsciiMode, currentCapsMode)
+        return ImeState(currentAsciiMode, NativeImeSys.imeCapsRead())
     }
 
     override fun syncTrackedState(ascii: Boolean, caps: Boolean) {
         currentAsciiMode = ascii
-        currentCapsMode = caps
-        logger.debug("Synced tracked state: ascii=$ascii, caps=$caps")
     }
 
     override fun dispose() {
@@ -109,7 +90,8 @@ class RimeImeProvider(
     }
 
     private fun onImeStateChanged(state: ImeState) {
-        syncTrackedState(state.isAsciiMode, state.isCapsLock)
+        currentAsciiMode = state.isAsciiMode
+        onStateChanged?.invoke(state)
     }
 
     private fun switchImeMode(arg: String, label: String) {

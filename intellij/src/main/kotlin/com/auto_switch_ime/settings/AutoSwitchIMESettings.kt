@@ -34,22 +34,22 @@ class AutoSwitchIMESettings : PersistentStateComponent<AutoSwitchIMESettings> {
 
     var enabled: Boolean = true
     var weaselServerPath: String = ""
-    var englishColor: String = "#00CC66"
-    var chineseColor: String = "#FF6666"
+    var englishColor: String = "#FFFFFF"
+    var chineseColor: String = "#00CC66"
     var capsLockColor: String = "#FFCC00"
 
     // Insert 模式自动切换规则
     // 默认：光标前以中文字符结尾，或光标后以中文字符开头时切换为中文模式
     var insertModeChineseBeforeRegex: String = ".*[\u4e00-\u9fa5]$"
     var insertModeChineseAfterRegex: String = "^[\u4e00-\u9fa5].*"
-    // 默认：光标前以大写/数字/下划线结尾，或光标后以大写/数字/下划线开头时切换为大写模式
-    var insertModeCapsBeforeRegex: String = ".*[A-Z0-9_]$"
-    var insertModeCapsAfterRegex: String = "^[A-Z0-9_].*"
+    // 默认：光标前以大写/数字/下划线结尾时切换为大写模式；光标后规则默认不启用
+    var insertModeCapsBeforeRegex: String = ".*[A-Z]{2,}[0-9_]?\$"
+    var insertModeCapsAfterRegex: String = ""
 
-    // 日志开关
-    var logError: Boolean = true
-    var logWarn: Boolean = true
-    var logInfo: Boolean = true
+    // 日志开关（默认全部关闭）
+    var logError: Boolean = false
+    var logWarn: Boolean = false
+    var logInfo: Boolean = false
     var logDebug: Boolean = false
 
     override fun getState(): AutoSwitchIMESettings = this

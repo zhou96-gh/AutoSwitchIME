@@ -1,0 +1,58 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
+let dllPath: string | null = null;
+let lib: ReturnType<typeof loadLib> | null = null;
+
+function loadLib() {
+  const koffi = require('koffi') as typeof import('koffi');
+  const dll = koffi.load(dllPath!);
+  function tryFunc(name: string, ret: string, params: string[] = []) {
+    try { return dll.func(name, ret, params); } catch { return null; }
+  }
+  return {
+    read: dll.func('ime_caps_read', 'int', []),
+    toggle: dll.func('ime_caps_toggle', 'int', []),
+    set: dll.func('ime_caps_set', 'int', ['int']),
+    composing: tryFunc('ime_is_composing', 'int', []),
+  };
+}
+
+export function initNative(extensionPath: string): void {
+  const candidates = [
+    path.join(extensionPath, 'bin', 'ime_sys.dll'),
+    path.join(extensionPath, '..', 'ime-sys', 'target', 'x86_64-pc-windows-gnu', 'release', 'ime_sys.dll'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      dllPath = p;
+      break;
+    }
+  }
+  if (!dllPath) return;
+  try {
+    lib = loadLib();
+  } catch {
+    lib = null;
+  }
+}
+
+export function isNativeAvailable(): boolean {
+  return lib !== null;
+}
+
+export function nativeCapsRead(): boolean {
+  return lib !== null && lib.read() !== 0;
+}
+
+export function nativeCapsToggle(): boolean {
+  return lib !== null && lib.toggle() !== 0;
+}
+
+export function nativeCapsSet(on: boolean): boolean {
+  return lib !== null && lib.set(on ? 1 : 0) !== 0;
+}
+
+export function nativeIsComposing(): number {
+  return lib?.composing?.() ?? -1;
+}

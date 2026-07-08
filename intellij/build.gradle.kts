@@ -9,11 +9,21 @@ plugins {
 group = property("pluginGroup")!!
 version = rootProject.version
 
+val copyImeSysDll by tasks.registering(Copy::class) {
+    from(rootProject.projectDir.resolve("ime-sys/target/x86_64-pc-windows-gnu/release/ime_sys.dll"))
+    into(layout.projectDirectory.dir("src/main/resources/native"))
+    onlyIf { rootProject.projectDir.resolve("ime-sys/target/x86_64-pc-windows-gnu/release/ime_sys.dll").exists() }
+}
+
+tasks.named("processResources") {
+    dependsOn(copyImeSysDll)
+}
+
 tasks.named("buildPlugin") {
     doLast {
         val distDir = layout.buildDirectory.dir("distributions").get().asFile
         val src = distDir.resolve("intellij-${project.version}.zip")
-        val outputDir = rootProject.layout.projectDirectory.dir("build/distributions").asFile
+        val outputDir = rootProject.layout.projectDirectory.dir("packages").asFile
         outputDir.mkdirs()
         val dest = outputDir.resolve("AutoSwitchIME-IntelliJ-${project.version}.zip")
         if (src.exists()) {

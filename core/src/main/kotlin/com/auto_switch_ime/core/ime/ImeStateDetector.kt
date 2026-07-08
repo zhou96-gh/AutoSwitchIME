@@ -4,10 +4,7 @@ import com.auto_switch_ime.core.ImeState
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
-import com.sun.jna.platform.win32.WinDef.HWND
-import com.sun.jna.platform.win32.WinDef.LPARAM
-import com.sun.jna.platform.win32.WinDef.LRESULT
-import com.sun.jna.platform.win32.WinDef.WPARAM
+import com.sun.jna.platform.win32.WinDef.*
 import com.sun.jna.win32.StdCallLibrary
 
 /**
@@ -32,7 +29,6 @@ object ImeStateDetector {
         }
 
         fun GetForegroundWindow(): HWND?
-        fun GetKeyState(nVirtKey: Int): Short
         fun SendMessageW(hWnd: HWND?, Msg: Int, wParam: WPARAM, lParam: LPARAM): LRESULT
     }
 
@@ -54,45 +50,15 @@ object ImeStateDetector {
      * 检测是否正在中文输入
      * @param stateWatcher 状态文件监听器
      * @return true 表示正在中文输入，应跳过切换
+     *
+     * 策略（双保险）：
+     * 1. 原生 DLL: ime_is_composing() 通过 IMM32 直接查前台窗口 IME 输入状态
+     * 2. Fallback: Lua 状态文件（Rime ctx:is_composing()）
      */
     fun isComposing(stateWatcher: StateWatcher): Boolean {
-        // 优先使用状态文件（最准确，来自 Rime Lua 脚本）
-        if (stateWatcher.isComposing) {
-            return true
-        }
-
-        // 回退 JNA
-        return isComposingViaJna()
-    }
-
-    private fun isComposingViaJna(): Boolean {
-        val user32 = MyUser32.INSTANCE ?: return false
-        val imm32 = Imm32.INSTANCE ?: return false
-
-        return try {
-            val fgWindow = user32.GetForegroundWindow() ?: return false
-            val imeWnd = imm32.ImmGetDefaultIMEWnd(fgWindow) ?: return false
-            if (Pointer.nativeValue(imeWnd.pointer) == 0L) return false
-
-            // 先检查 IME 是否打开
-            val openResult = user32.SendMessageW(
-                imeWnd, WM_IME_CONTROL, WPARAM(IMC_GETOPENSTATUS.toLong()), LPARAM(0L)
-            )
-            val isOpen = openResult.toLong() != 0L
-            if (!isOpen) return false
-
-            // IME 打开时，进一步检查是否为中文模式
-            val modeResult = user32.SendMessageW(
-                imeWnd, WM_IME_CONTROL, WPARAM(IMC_GETCONVERSIONMODE.toLong()), LPARAM(0L)
-            )
-            val modeVal = modeResult.toLong()
-            val isChineseMode = (modeVal and 0x01L) != 0L
-
-            // 只有中文 composing 时才跳过切换
-            isChineseMode
-        } catch (e: Exception) {
-            false
-        }
+        val nativeResult = NativeImeSys.imeIsComposing()
+        if (nativeResult >= 0) return nativeResult == 1
+        return stateWatcher.isComposing
     }
 
     /**
@@ -126,7 +92,7 @@ object ImeStateDetector {
             }
 
             val isAsciiMode = (modeVal and 0x01L) == 0L
-            val isCapsLock = (user32.GetKeyState(0x14).toInt() and 0x01) != 0
+            val isCapsLock = NativeImeSys.imeCapsRead()
 
             ImeState(isAsciiMode, isCapsLock)
         } catch (e: Exception) {

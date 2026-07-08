@@ -12,10 +12,8 @@ local function log_warn(msg)
     end
 end
 
-local function write_state(env, ascii_mode, caps_lock, is_composing)
-    if ascii_mode == env.last_ascii_mode
-        and caps_lock == env.last_caps_lock
-        and is_composing == env.last_is_composing then
+local function write_state(env, ascii_mode, is_composing)
+    if ascii_mode == env.last_ascii_mode and is_composing == env.last_is_composing then
         return
     end
 
@@ -28,12 +26,11 @@ local function write_state(env, ascii_mode, caps_lock, is_composing)
     local state_file = temp_dir .. "\\ime-state-rime.json"
     local tmp_file = state_file .. ".tmp"
 
-    log_info("Writing state: ascii=" .. tostring(ascii_mode) .. ", caps=" .. tostring(caps_lock) .. ", composing=" .. tostring(is_composing))
+    log_info("Writing state: ascii=" .. tostring(ascii_mode) .. ", composing=" .. tostring(is_composing))
 
     local json = string.format(
-        '{"ascii_mode": %s, "caps_lock": %s, "is_composing": %s, "timestamp": %d}',
+        '{"ascii_mode": %s, "caps_lock": false, "is_composing": %s, "timestamp": %d}',
         ascii_mode and "true" or "false",
-        caps_lock and "true" or "false",
         is_composing and "true" or "false",
         os.time()
     )
@@ -46,7 +43,6 @@ local function write_state(env, ascii_mode, caps_lock, is_composing)
         os.rename(tmp_file, state_file)
 
         env.last_ascii_mode = ascii_mode
-        env.last_caps_lock = caps_lock
         env.last_is_composing = is_composing
         log_info("State file written successfully (atomic)")
     else
@@ -58,9 +54,7 @@ function M.init(env)
     log_info("rimevim_bridge.lua initialized")
 
     env.last_ascii_mode = nil
-    env.last_caps_lock = nil
     env.last_is_composing = nil
-    env.caps_lock = false
 
     env.option_conn = env.engine.context.option_update_notifier:connect(
         function(ctx, name)
@@ -68,7 +62,7 @@ function M.init(env)
                 local ascii_mode = ctx:get_option("ascii_mode") or false
                 local is_composing = ctx:is_composing()
                 log_info("ascii_mode changed=" .. tostring(ascii_mode))
-                write_state(env, ascii_mode, env.caps_lock, is_composing)
+                write_state(env, ascii_mode, is_composing)
             end
         end
     )
@@ -79,7 +73,7 @@ function M.init(env)
             local is_composing = ctx:is_composing()
             if is_composing ~= env.last_is_composing then
                 log_info("composing changed: " .. tostring(is_composing))
-                write_state(env, ascii_mode, env.caps_lock, is_composing)
+                write_state(env, ascii_mode, is_composing)
             end
         end
     )
@@ -89,19 +83,11 @@ function M.init(env)
         local ascii_mode = context:get_option("ascii_mode") or false
         local is_composing = context:is_composing()
         log_info("Initial state: ascii=" .. tostring(ascii_mode) .. ", composing=" .. tostring(is_composing))
-        write_state(env, ascii_mode, env.caps_lock, is_composing)
+        write_state(env, ascii_mode, is_composing)
     end
 end
 
 function M.func(key, env)
-    local caps_changed = false
-
-    if key:repr() == "Caps_Lock" then
-        env.caps_lock = not env.caps_lock
-        caps_changed = true
-        log_info("CapsLock toggled by key: " .. tostring(env.caps_lock))
-    end
-
     local context = env.engine.context
     if not context then
         return 2
@@ -109,11 +95,9 @@ function M.func(key, env)
 
     local current_ascii = context:get_option("ascii_mode") or false
     local current_composing = context:is_composing()
-    if caps_changed
-        or env.last_ascii_mode ~= current_ascii
-        or env.last_is_composing ~= current_composing then
-        log_info("state changed: ascii=" .. tostring(current_ascii) .. ", caps=" .. tostring(env.caps_lock) .. ", composing=" .. tostring(current_composing))
-        write_state(env, current_ascii, env.caps_lock, current_composing)
+    if env.last_ascii_mode ~= current_ascii or env.last_is_composing ~= current_composing then
+        log_info("state changed: ascii=" .. tostring(current_ascii) .. ", composing=" .. tostring(current_composing))
+        write_state(env, current_ascii, current_composing)
     end
 
     return 2

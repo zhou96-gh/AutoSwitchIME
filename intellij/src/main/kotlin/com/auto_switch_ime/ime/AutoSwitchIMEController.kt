@@ -7,7 +7,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import kotlinx.coroutines.runBlocking
 
-@Service
+@Service(Service.Level.APP)
 class AutoSwitchIMEController {
     private val logger = IntelliJLogger
     private val provider: RimeImeProvider by lazy {
@@ -16,6 +16,10 @@ class AutoSwitchIMEController {
     }
 
     val stateWatcher: StateWatcher get() = provider.stateWatcher
+
+    var onStateChanged: ((ImeState) -> Unit)?
+        get() = provider.onStateChanged
+        set(value) { provider.onStateChanged = value }
 
     fun getTrackedState(): ImeState = provider.getTrackedState()
 

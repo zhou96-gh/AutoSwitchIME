@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("org.jetbrains.kotlin.jvm")
 }
@@ -13,8 +15,9 @@ dependencies {
     implementation(kotlin("stdlib"))
     
     // JNA 用于 Windows API 调用
-    implementation("net.java.dev.jna:jna:5.14.0")
-    implementation("net.java.dev.jna:jna-platform:5.14.0")
+    // compileOnly: IntelliJ IDE 自带 JNA，插件不打包，避免 native library 加载冲突
+    compileOnly("net.java.dev.jna:jna:5.14.0")
+    compileOnly("net.java.dev.jna:jna-platform:5.14.0")
     
     // 测试依赖
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
@@ -26,5 +29,11 @@ tasks.test {
 }
 
 kotlin {
-    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+tasks.withType<JavaCompile> {
+    options.release.set(17)
 }

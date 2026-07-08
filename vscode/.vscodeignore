@@ -1,0 +1,8 @@
+.vscode/**
+node_modules/**
+!node_modules/koffi/**
+!node_modules/@koromix/**
+src/**
+tsconfig.json
+.gitignore
+**/*.map

@@ -53,10 +53,10 @@ object RuleEvaluator {
     }
 
     /**
-     * 检查正则是否匹配（空规则视为匹配）
+     * 检查正则是否匹配（空规则不触发）
      */
     private fun matchesRegex(pattern: String, text: String): Boolean {
-        if (pattern.isBlank()) return true
+        if (pattern.isBlank()) return false
         return try {
             val compiled = patternCache.getOrPut(pattern) { Pattern.compile(pattern) }
             compiled.matcher(text).find()

@@ -2,7 +2,7 @@
   "name": "auto-switch-ime",
   "displayName": "Auto Switch IME",
   "description": "Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示",
-  "version": "2.1.1",
+  "version": "2.2.6",
   "publisher": "auto-switch-ime",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -63,7 +63,7 @@
         },
         "autoSwitchIME.capsAfterRegex": {
           "type": "string",
-          "default": "^[A-Z][0-9_]?.*",
+          "default": "",
           "description": "光标后的大写触发正则"
         },
         "autoSwitchIME.caretDebounceMs": {

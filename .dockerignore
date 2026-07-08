@@ -1,0 +1,13 @@
+.git
+.gitignore
+.gitattributes
+.gradle
+.kotlin
+.intellijPlatform
+node_modules
+build
+dist
+out
+*.zip
+*.vsix
+*.log

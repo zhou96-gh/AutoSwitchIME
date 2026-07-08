@@ -16,6 +16,13 @@ out/
 .DS_Store
 Thumbs.db
 
+# Rust
+ime-sys/target/
+
+# VSCode extension artifacts
+vscode/node_modules/
+*.vsix
+
 # Misc
 *.class
 *.log
