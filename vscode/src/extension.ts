@@ -26,6 +26,7 @@ let lastUpdateTime = 0;
 let lastActionKey: string | null = null;
 /** 标志当前 CapsLock 变化是否由插件自身触发（避免轮询误响应） */
 let programmaticCapsChange = false;
+let programmaticCapsChangeTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Auto Switch IME');
@@ -130,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
       // 跳过插件自身触发的切换，避免冗余调用
       if (programmaticCapsChange) {
-        programmaticCapsChange = false;
+        clearProgrammaticCapsChange();
         const state = provider.getTrackedState();
         const action = current ? ImeAction.CAPS : (state.isAsciiMode ? ImeAction.ENGLISH : ImeAction.CHINESE);
         applyColorAndStatus(action, state);
@@ -156,7 +157,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }, 200);
   // 还原初始标记（activate 期间没有程序化切换）
-  programmaticCapsChange = false;
+  clearProgrammaticCapsChange();
 
   logger.info('AutoSwitchIME VSCode extension activated');
 }
@@ -177,6 +178,11 @@ export async function deactivate(): Promise<void> {
   if (capsPollTimer) {
     clearInterval(capsPollTimer);
     capsPollTimer = null;
+  }
+
+  if (programmaticCapsChangeTimer) {
+    clearTimeout(programmaticCapsChangeTimer);
+    programmaticCapsChangeTimer = null;
   }
 
   for (const d of disposables) {
@@ -263,6 +269,24 @@ function applyColorAndStatus(action: ImeAction, state?: ImeState, forceColor = f
   }
 }
 
+function markProgrammaticCapsChangeIfNeeded(targetCapsLock: boolean): void {
+  if (provider.getTrackedState().isCapsLock === targetCapsLock) return;
+  clearProgrammaticCapsChange();
+  programmaticCapsChange = true;
+  programmaticCapsChangeTimer = setTimeout(() => {
+    programmaticCapsChange = false;
+    programmaticCapsChangeTimer = null;
+  }, 1000);
+}
+
+function clearProgrammaticCapsChange(): void {
+  programmaticCapsChange = false;
+  if (programmaticCapsChangeTimer) {
+    clearTimeout(programmaticCapsChangeTimer);
+    programmaticCapsChangeTimer = null;
+  }
+}
+
 async function updateEditorState(editor: vscode.TextEditor): Promise<void> {
   if (!settings.enabled || !isActive) return;
   const now = Date.now();
@@ -310,6 +334,7 @@ async function updateEditorState(editor: vscode.TextEditor): Promise<void> {
         } else {
           logger.debug(`Normal-like Vim mode: ${vimMode}, forcing ASCII`);
         }
+        markProgrammaticCapsChangeIfNeeded(false);
         await provider.setAsciiMode(true);
         applyColorAndStatus(ImeAction.ENGLISH, { isAsciiMode: true, isCapsLock: false, isComposing: false }, true);
       } else {
@@ -322,22 +347,22 @@ async function updateEditorState(editor: vscode.TextEditor): Promise<void> {
           continue;
         }
 
-        // 标记所有 provider 调用为程序化操作，避免轮询重复响应
-        programmaticCapsChange = true;
-
         switch (action) {
           case ImeAction.CHINESE:
             logger.info('Insert mode: Chinese');
+            markProgrammaticCapsChangeIfNeeded(false);
             await provider.setAsciiMode(false);
             applyColorAndStatus(ImeAction.CHINESE, { isAsciiMode: false, isCapsLock: false, isComposing: false });
             break;
           case ImeAction.CAPS:
             logger.info('Insert mode: Caps');
+            markProgrammaticCapsChangeIfNeeded(true);
             await provider.setCapsMode();
             applyColorAndStatus(ImeAction.CAPS, { isAsciiMode: true, isCapsLock: true, isComposing: false });
             break;
           case ImeAction.ENGLISH:
             logger.info('Insert mode: English');
+            markProgrammaticCapsChangeIfNeeded(false);
             await provider.setAsciiMode(true);
             applyColorAndStatus(ImeAction.ENGLISH, { isAsciiMode: true, isCapsLock: false, isComposing: false });
             break;

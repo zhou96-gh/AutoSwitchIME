@@ -43,7 +43,7 @@ docker compose run --rm dev
 ./gradlew clean :intellij:buildPlugin -x buildSearchableOptions -x prepareJarSearchableOptions
 
 # VSCode 扩展
-cd vscode && npx vsce package --no-dependencies --allow-missing-repository
+cd vscode && npx vsce package --allow-missing-repository
 
 # Rust 原生模块
 cd ime-sys && cargo build --release --target x86_64-pc-windows-gnu
