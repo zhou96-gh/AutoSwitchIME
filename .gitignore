@@ -24,8 +24,7 @@ vscode/node_modules/
 *.vsix
 
 # Packaged release artifacts
-packages/*.zip
-packages/*.vsix
+packages/
 
 # Misc
 *.class
