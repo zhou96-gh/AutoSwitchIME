@@ -31,6 +31,10 @@ class AutoSwitchIMEController {
         runBlocking { provider.setCapsMode() }
     }
 
+    fun releaseOwnedCapsLock() {
+        runBlocking { provider.releaseOwnedCapsLock() }
+    }
+
     fun resolvePath(): String? {
         return WeaselPathDetector.detect(logger)
     }

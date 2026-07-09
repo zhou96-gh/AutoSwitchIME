@@ -85,6 +85,9 @@ export interface ImeProvider {
   /** 切换大写模式 */
   setCapsMode(): Promise<void>;
 
+  /** 释放插件自身开启的 CapsLock */
+  releaseOwnedCapsLock(): Promise<void>;
+
   /** 是否正在输入 */
   isComposing(): Promise<boolean>;
 

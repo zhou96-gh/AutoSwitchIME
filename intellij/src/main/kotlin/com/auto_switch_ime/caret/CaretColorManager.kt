@@ -3,6 +3,7 @@ package com.auto_switch_ime.caret
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.CaretVisualAttributes
 import com.intellij.openapi.editor.ex.EditorEx
+import com.auto_switch_ime.core.ime.NativeImeSys
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import java.awt.Color
 
@@ -16,8 +17,9 @@ object CaretColorManager {
         val settings = AutoSwitchIMESettings.instance
         if (!settings.enabled) return
 
+        val actualCapsLock = if (NativeImeSys.isAvailable()) NativeImeSys.imeCapsRead() else isCapsLock
         val color = when {
-            isCapsLock -> parseColor(settings.capsLockColor, DEFAULT_CAPSLOCK_COLOR)
+            actualCapsLock -> parseColor(settings.capsLockColor, DEFAULT_CAPSLOCK_COLOR)
             isAsciiMode -> parseColor(settings.englishColor, DEFAULT_ENGLISH_COLOR)
             else -> parseColor(settings.chineseColor, DEFAULT_CHINESE_COLOR)
         }

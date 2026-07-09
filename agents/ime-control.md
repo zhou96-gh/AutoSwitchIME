@@ -14,6 +14,7 @@ core/ (Kotlin)
 ├── ImeProvider 接口
 │   ├── setAsciiMode(ascii: Boolean)
 │   ├── setCapsMode()
+│   ├── releaseOwnedCapsLock()
 │   ├── isComposing(): Boolean
 │   ├── getTrackedState(): ImeState
 │   └── dispose()
@@ -34,11 +35,16 @@ vscode/ (TypeScript + koffi)
 ## 核心链路
 
 Vim 模式变化 → RimeImeProvider:
-1. `setCapsMode()`: nativeCapsToggle() → 物理切换 CapsLock
-2. `setAsciiMode(ascii)`: nativeCapsToggle()（需退出大写时）+ WeaselServer.exe /ascii|/nascii
+1. `setCapsMode()`: nativeCapsSet(true) → 物理开启 CapsLock
+2. `setAsciiMode(ascii)`: 必要时释放插件自己开启的 CapsLock + WeaselServer.exe /ascii|/nascii
 3. `getTrackedState()`: ascii_mode 来自跟踪值, caps_lock 来自即时物理读
+4. `isComposing()`: 优先 native ime_is_composing(), 失败时 fallback 状态文件
+
+Provider 内部会串行化切换请求，并在目标状态已满足时直接返回，避免多入口重复触发外部 `WeaselServer.exe` 调用。
 
 物理 CapsLock 是唯一真相源，无软件镜像状态。
+
+CapsLock 有所有权边界：只有插件从关闭状态主动打开的 CapsLock 才由插件释放；用户在编辑器或其他应用中手动打开的 CapsLock 不会被 `setAsciiMode()`、窗口失焦或插件停用关闭。
 
 ## ImeProvider 接口
 
@@ -47,6 +53,7 @@ interface ImeProvider {
     val name: String
     suspend fun setAsciiMode(ascii: Boolean)
     suspend fun setCapsMode()
+    suspend fun releaseOwnedCapsLock()
     suspend fun isComposing(): Boolean
     fun getTrackedState(): ImeState
     fun syncTrackedState(ascii: Boolean, caps: Boolean)

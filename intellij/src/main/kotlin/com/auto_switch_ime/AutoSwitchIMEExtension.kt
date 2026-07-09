@@ -1,7 +1,6 @@
 package com.auto_switch_ime
 
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.maddyhome.idea.vim.api.VimEditor
@@ -13,11 +12,11 @@ import com.maddyhome.idea.vim.state.mode.Mode
 import com.auto_switch_ime.caret.CaretColorManager
 import com.auto_switch_ime.core.ImeAction
 import com.auto_switch_ime.core.ime.ImeStateDetector
-import com.auto_switch_ime.core.rules.RuleEvaluator
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
+import com.auto_switch_ime.util.InsertModeDecision
 import com.auto_switch_ime.util.VimModeChecker
 
 /**
@@ -128,10 +127,9 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
 
             when (currentMode) {
                 is Mode.INSERT -> {
-                    val (before, after) = getLineContextText(ijEditor)
-                    AutoSwitchIMELogger.info("Insert context: before='$before', after='$after'")
-                    val settings = AutoSwitchIMESettings.instance
-                    val action = evaluateInsertModeRules(before, after, settings)
+                    val decision = InsertModeDecision.evaluate(ijEditor)
+                    AutoSwitchIMELogger.info("Insert context: before='${decision.context.before}', after='${decision.context.after}'")
+                    val action = decision.action
                     if (ActionDeduplicator.shouldSkip(ijEditor, action)) {
                         AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: duplicated $action action skipped")
                         return@invokeLater
@@ -161,52 +159,6 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                 else -> Unit
             }
         }
-    }
-
-    /**
-     * 获取光标所在行的上下文文本（不跨行）
-     * @return Pair(光标前文本，光标后文本)
-     */
-    private fun getLineContextText(editor: com.intellij.openapi.editor.Editor): Pair<String, String> {
-        return runReadActionBlocking {
-            try {
-                val document = editor.document
-                val caretOffset = editor.caretModel.primaryCaret.offset
-                val lineNumber = document.getLineNumber(caretOffset)
-                val lineStart = document.getLineStartOffset(lineNumber)
-                val lineEnd = document.getLineEndOffset(lineNumber)
-
-                val beforeStart = maxOf(lineStart, caretOffset - 5)
-                val afterEnd = minOf(lineEnd, caretOffset + 5)
-                val before = document.getText(com.intellij.openapi.util.TextRange(beforeStart, caretOffset))
-                val after = document.getText(com.intellij.openapi.util.TextRange(caretOffset, afterEnd))
-                Pair(before, after)
-            } catch (e: Exception) {
-                AutoSwitchIMELogger.warn("Failed to get line context text", e)
-                Pair("", "")
-            }
-        }
-    }
-
-    /**
-     * 根据配置的正则规则评估 Insert 模式下的输入法状态
-     * - 中文规则：光标前或光标后任一匹配时切换为中文
-     * - 大写规则：光标前或光标后任一匹配时切换为大写
-     * 优先级：中文规则 → 大写规则 → 默认英文
-     */
-    private fun evaluateInsertModeRules(
-        before: String,
-        after: String,
-        settings: AutoSwitchIMESettings
-    ): ImeAction {
-        return RuleEvaluator.evaluate(
-            before = before,
-            after = after,
-            chineseBeforeRegex = settings.insertModeChineseBeforeRegex,
-            chineseAfterRegex = settings.insertModeChineseAfterRegex,
-            capsBeforeRegex = settings.insertModeCapsBeforeRegex,
-            capsAfterRegex = settings.insertModeCapsAfterRegex
-        )
     }
 
     override fun dispose() {

@@ -1,8 +1,14 @@
 .vscode/**
 node_modules/**
 !node_modules/koffi/**
-!node_modules/@koromix/**
+!node_modules/@koromix/
+!node_modules/@koromix/koffi-win32-x64/**
 src/**
+scripts/**
+**/__pycache__/**
 tsconfig.json
 .gitignore
+.dockerignore
+Dockerfile
+compose*.yaml
 **/*.map

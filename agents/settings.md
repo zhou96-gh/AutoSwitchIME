@@ -36,6 +36,7 @@
    - 中文规则 → 中文模式
    - 大写规则 → 大写模式
    - 默认 → 英文模式
+3. IntelliJ 入口统一通过 `intellij/src/.../util/InsertModeDecision.kt` 获取上下文并调用 `RuleEvaluator`，不要在各监听器里复制规则评估逻辑。
 
 ### 性能
 - `regexCache.getOrPut(pattern) { Pattern.compile(pattern) }`

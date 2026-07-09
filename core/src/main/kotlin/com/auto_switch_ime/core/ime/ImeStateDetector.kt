@@ -9,7 +9,7 @@ import com.sun.jna.win32.StdCallLibrary
 
 /**
  * IME 状态检测器
- * 优先使用状态文件，回退 JNA IMM32 API
+ * 优先使用原生 DLL，回退状态文件/JNA IMM32 API
  */
 object ImeStateDetector {
 

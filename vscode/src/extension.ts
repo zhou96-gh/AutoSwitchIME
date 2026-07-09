@@ -164,6 +164,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export async function deactivate(): Promise<void> {
   isActive = false;
+  await releaseOwnedCapsLock();
 
   if (caretDebounceTimer) {
     clearTimeout(caretDebounceTimer);
@@ -199,6 +200,16 @@ export async function deactivate(): Promise<void> {
 }
 
 function setupEditorListeners(): void {
+  // VSCode 失焦时只释放插件自己开启的 CapsLock，避免影响其他应用。
+  disposables.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (state.focused || !settings.enabled) return;
+      releaseOwnedCapsLock().catch((err) =>
+        logger.warn('releaseOwnedCapsLock failed', err),
+      );
+    }),
+  );
+
   // 监听光标位置变化（防抖 50ms）
   disposables.push(
     vscode.window.onDidChangeTextEditorSelection((e) => {
@@ -237,6 +248,12 @@ function setupEditorListeners(): void {
   );
 }
 
+async function releaseOwnedCapsLock(): Promise<void> {
+  await provider?.releaseOwnedCapsLock();
+  lastCapsState = provider?.getTrackedState().isCapsLock ?? false;
+  clearProgrammaticCapsChange();
+}
+
 async function onVimModeChanged(mode: VimMode): Promise<void> {
   statusBar?.updateVimMode(mode);
   const editor = vscode.window.activeTextEditor;
@@ -263,9 +280,14 @@ async function initializeEditor(editor: vscode.TextEditor): Promise<void> {
 }
 
 function applyColorAndStatus(action: ImeAction, state?: ImeState, forceColor = false): void {
-  caretColor.updateCaretColor(action, forceColor);
+  const actualCapsLock = provider.getTrackedState().isCapsLock;
+  const effectiveAction = actualCapsLock ? ImeAction.CAPS : action;
+  caretColor.updateCaretColor(effectiveAction, forceColor);
   if (state) {
-    statusBar?.updateImeState(state, action);
+    statusBar?.updateImeState(
+      { ...state, isCapsLock: actualCapsLock },
+      effectiveAction,
+    );
   }
 }
 

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ImeProvider, ImeState, ImeType, Logger } from '../core/types';
 import { StateWatcher } from '../core/StateWatcher';
-import { initNative, isNativeAvailable, nativeCapsRead, nativeCapsToggle, nativeIsComposing } from '../core/native';
+import { initNative, isNativeAvailable, nativeCapsRead, nativeCapsSet, nativeIsComposing } from '../core/native';
 
 const execFileAsync = promisify(execFile);
 
@@ -92,6 +92,7 @@ export class RimeImeProvider implements ImeProvider {
   currentAsciiMode = true;
   private weaselServerPath: string | null;
   private warnedMissing = false;
+  private ownsCapsLock = false;
   /** 状态文件中的 isComposing（延迟更新），native 检测失败时 fallback */
   private fileIsComposing = false;
 
@@ -128,9 +129,10 @@ export class RimeImeProvider implements ImeProvider {
       const alreadyAscii = this.currentAsciiMode === ascii;
       if (alreadyAscii && !capsOn) return;
 
-      // 无论切换到中文还是英文，CapsLock 都不应该开着（否则输出异常）
-      if (capsOn) {
+      // 只关闭插件自己开启的 CapsLock，不影响用户手动开启的全局 CapsLock。
+      if (capsOn && this.ownsCapsLock) {
         await this.forceCapsOff();
+        this.ownsCapsLock = false;
       }
 
       if (alreadyAscii) return;
@@ -160,7 +162,8 @@ export class RimeImeProvider implements ImeProvider {
   async setCapsMode(): Promise<void> {
     this.stateWatcher.isForcingImeSwitch = true;
     try {
-      if (this.currentAsciiMode && nativeCapsRead()) return;
+      const capsOnBefore = nativeCapsRead();
+      if (this.currentAsciiMode && capsOnBefore) return;
 
       // Caps 模式 = WeaselServer 英文模式 + CapsLock 开启
       // 确保 WeaselServer 在英文模式（/ascii），这样输出大写英文字母
@@ -172,11 +175,14 @@ export class RimeImeProvider implements ImeProvider {
       // 开启 CapsLock（含重试 + 验证）
       if (!nativeCapsRead()) {
         await this.forceCapsOn();
+        this.ownsCapsLock = nativeCapsRead();
+      } else {
+        this.ownsCapsLock = false;
       }
 
       this.onStateChanged?.({
         isAsciiMode: true,
-        isCapsLock: true,
+        isCapsLock: nativeCapsRead(),
         isComposing: false,
       });
     } finally {
@@ -184,12 +190,25 @@ export class RimeImeProvider implements ImeProvider {
     }
   }
 
+  async releaseOwnedCapsLock(): Promise<void> {
+    if (!this.ownsCapsLock) return;
+    if (nativeCapsRead()) {
+      await this.forceCapsOff();
+    }
+    this.ownsCapsLock = false;
+    this.onStateChanged?.({
+      isAsciiMode: this.currentAsciiMode,
+      isCapsLock: nativeCapsRead(),
+      isComposing: this.fileIsComposing,
+    });
+  }
+
   /** 强制开启 CapsLock，最多重试 5 次，每次间隔 50ms */
   private async forceCapsOn(): Promise<void> {
     for (let i = 0; i < 5; i++) {
       if (nativeCapsRead()) return;
       if (!isNativeAvailable()) return;
-      nativeCapsToggle();
+      nativeCapsSet(true);
       await this.sleepAsync(50);
     }
   }
@@ -199,7 +218,7 @@ export class RimeImeProvider implements ImeProvider {
     for (let i = 0; i < 5; i++) {
       if (!nativeCapsRead()) return;
       if (!isNativeAvailable()) return;
-      nativeCapsToggle();
+      nativeCapsSet(false);
       await this.sleepAsync(50);
     }
   }
@@ -237,7 +256,10 @@ export class RimeImeProvider implements ImeProvider {
   private onImeStateChanged(state: ImeState): void {
     this.currentAsciiMode = state.isAsciiMode;
     this.fileIsComposing = state.isComposing;
-    this.onStateChanged?.(state);
+    this.onStateChanged?.({
+      ...state,
+      isCapsLock: nativeCapsRead(),
+    });
   }
 
   private async switchImeMode(arg: string): Promise<void> {

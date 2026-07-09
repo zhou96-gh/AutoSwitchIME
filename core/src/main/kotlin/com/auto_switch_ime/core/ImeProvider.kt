@@ -13,6 +13,9 @@ interface ImeProvider {
     
     /** 切换大写模式 */
     suspend fun setCapsMode()
+
+    /** 释放插件自身开启的 CapsLock，不影响用户原本开启的 CapsLock */
+    suspend fun releaseOwnedCapsLock()
     
     /** 是否正在输入（显示候选词窗口） */
     suspend fun isComposing(): Boolean
