@@ -16,6 +16,21 @@
 
 ## Docker 构建
 
+### 版本要求
+
+打包前必须根据本次改动更新版本号，不能用旧版本重复打包。
+
+- patch：bug 修复、行为修正、文档或构建修复
+- minor：向后兼容的新能力、新配置项、新平台能力
+- major：破坏性配置、接口或行为变更
+
+同步更新位置：
+
+- 根目录 `AGENTS.md` 的当前版本
+- `gradle.properties` 的 `pluginVersion`
+- `vscode/package.json` 的 `version`
+- `vscode/package-lock.json` 顶部根包版本
+
 ```bash
 # 构建镜像
 cd /projects/ai_code/RimeVimIME

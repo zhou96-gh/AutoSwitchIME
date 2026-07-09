@@ -23,6 +23,10 @@ ime-sys/target/
 vscode/node_modules/
 *.vsix
 
+# Packaged release artifacts
+packages/*.zip
+packages/*.vsix
+
 # Misc
 *.class
 *.log

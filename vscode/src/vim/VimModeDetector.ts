@@ -52,20 +52,11 @@ export function isVisualMode(mode: VimMode): boolean {
 }
 
 /**
- * 判断模式是否需要 IME 操作
- * Normal/Visual/Select 模式强制英文
- * Insert/Replace 模式按规则切换
+ * 判断当前是否处于需要按 Normal 处理的 Vim 模式
+ * 只有 Insert/UNKNOWN 按规则切换，其他已知 Vim 模式强制英文
  */
-/**
- * 判断模式是否需要 IME 操作
- * 当 vscodevim 未安装时 mode 为 UNKNOWN，视为可编辑模式（始终使用规则评估）
- */
-export function isEditableMode(mode: VimMode): boolean {
-  return mode !== VimMode.NORMAL &&
-    mode !== VimMode.VISUAL &&
-    mode !== VimMode.VISUAL_LINE &&
-    mode !== VimMode.VISUAL_BLOCK &&
-    mode !== VimMode.COMMAND;
+export function isNormalLikeMode(mode: VimMode): boolean {
+  return mode !== VimMode.INSERT && mode !== VimMode.UNKNOWN;
 }
 
 /**

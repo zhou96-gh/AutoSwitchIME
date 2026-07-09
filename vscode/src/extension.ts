@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { VSCodeLogger, VimMode, ImeAction, ImeState } from './core/types';
 import { evaluateRules } from './core/RuleEvaluator';
 import { RimeImeProvider } from './providers/RimeImeProvider';
-import { VimModeDetector, isEditableMode } from './vim/VimModeDetector';
+import { VimModeDetector, isNormalLikeMode } from './vim/VimModeDetector';
 import { CaretColorManager } from './ui/CaretColor';
 import { ImeStatusBar } from './ui/StatusBar';
 import { getSettings, onSettingsChanged, PluginSettings } from './settings';
@@ -21,6 +21,7 @@ let lastCapsState = false;
 let isActive = false;
 let updateLock = false;
 let updatePending = false;
+let throttleRetryTimer: ReturnType<typeof setTimeout> | null = null;
 let lastUpdateTime = 0;
 let lastActionKey: string | null = null;
 /** 标志当前 CapsLock 变化是否由插件自身触发（避免轮询误响应） */
@@ -85,11 +86,24 @@ export function activate(context: vscode.ExtensionContext): void {
   provider.onStateChanged = (state: ImeState) => {
     if (!isActive || !settings.enabled) return;
     invalidateLastAction();
+    if (isNormalLikeMode(modeDetector.currentMode)) {
+      if (!vscode.window.state.focused) return;
+      const editor = vscode.window.activeTextEditor;
+      if (editor) {
+        updateEditorState(editor).catch((err) =>
+          logger.warn('updateEditorState failed', err),
+        );
+      }
+      return;
+    }
+
     const action = state.isCapsLock
       ? ImeAction.CAPS
       : state.isAsciiMode ? ImeAction.ENGLISH : ImeAction.CHINESE;
     applyColorAndStatus(action, state);
   };
+
+  isActive = true;
 
   const editor = vscode.window.activeTextEditor;
   if (editor) {
@@ -102,6 +116,17 @@ export function activate(context: vscode.ExtensionContext): void {
     const current = provider.getTrackedState().isCapsLock;
     if (current !== lastCapsState) {
       lastCapsState = current;
+
+      if (isNormalLikeMode(modeDetector.currentMode)) {
+        if (!vscode.window.state.focused) return;
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+          updateEditorState(editor).catch((err) =>
+            logger.warn('updateEditorState failed', err),
+          );
+        }
+        return;
+      }
 
       // 跳过插件自身触发的切换，避免冗余调用
       if (programmaticCapsChange) {
@@ -133,7 +158,6 @@ export function activate(context: vscode.ExtensionContext): void {
   // 还原初始标记（activate 期间没有程序化切换）
   programmaticCapsChange = false;
 
-  isActive = true;
   logger.info('AutoSwitchIME VSCode extension activated');
 }
 
@@ -143,6 +167,11 @@ export async function deactivate(): Promise<void> {
   if (caretDebounceTimer) {
     clearTimeout(caretDebounceTimer);
     caretDebounceTimer = null;
+  }
+
+  if (throttleRetryTimer) {
+    clearTimeout(throttleRetryTimer);
+    throttleRetryTimer = null;
   }
 
   if (capsPollTimer) {
@@ -212,14 +241,20 @@ async function onVimModeChanged(mode: VimMode): Promise<void> {
 
 async function initializeEditor(editor: vscode.TextEditor): Promise<void> {
   const tracked = provider.getTrackedState();
+  const normalLikeMode = isNormalLikeMode(modeDetector.currentMode);
+  if (normalLikeMode) {
+    await updateEditorState(editor);
+    return;
+  }
+
   const action = tracked.isCapsLock
     ? ImeAction.CAPS
     : tracked.isAsciiMode ? ImeAction.ENGLISH : ImeAction.CHINESE;
   await applyColorAndStatus(action, tracked);
 }
 
-function applyColorAndStatus(action: ImeAction, state?: ImeState): void {
-  caretColor.updateCaretColor(action);
+function applyColorAndStatus(action: ImeAction, state?: ImeState, forceColor = false): void {
+  caretColor.updateCaretColor(action, forceColor);
   if (state) {
     statusBar?.updateImeState(state, action);
   }
@@ -230,6 +265,14 @@ async function updateEditorState(editor: vscode.TextEditor): Promise<void> {
   const now = Date.now();
   if (now - lastUpdateTime < 50) {
     updatePending = true;
+    if (!throttleRetryTimer) {
+      throttleRetryTimer = setTimeout(() => {
+        throttleRetryTimer = null;
+        updateEditorState(editor).catch((err) =>
+          logger.warn('updateEditorState failed', err),
+        );
+      }, 50 - (now - lastUpdateTime));
+    }
     return;
   }
   lastUpdateTime = now;
@@ -247,8 +290,10 @@ async function updateEditorState(editor: vscode.TextEditor): Promise<void> {
         return;
       }
 
+      const vimMode = modeDetector.currentMode;
+      const normalLikeMode = isNormalLikeMode(vimMode);
       const modeBefore = provider.currentAsciiMode;
-      if (!modeBefore) {
+      if (!normalLikeMode && !modeBefore) {
         const isComposing = await provider.isComposing();
         if (isComposing) {
           logger.debug('Rime is composing, skipping IME switch');
@@ -256,16 +301,14 @@ async function updateEditorState(editor: vscode.TextEditor): Promise<void> {
         }
       }
 
-      const vimMode = modeDetector.currentMode;
-
-      if (!isEditableMode(vimMode)) {
+      if (normalLikeMode) {
         if (shouldSkipAction(editor, ImeAction.ENGLISH)) {
           logger.debug('Duplicated English action skipped');
-          continue;
+        } else {
+          logger.debug(`Normal-like Vim mode: ${vimMode}, forcing ASCII`);
         }
-        logger.debug(`Vim mode: ${vimMode}, forcing ASCII`);
         await provider.setAsciiMode(true);
-        applyColorAndStatus(ImeAction.ENGLISH, { isAsciiMode: true, isCapsLock: false, isComposing: false });
+        applyColorAndStatus(ImeAction.ENGLISH, { isAsciiMode: true, isCapsLock: false, isComposing: false }, true);
       } else {
         const { before, after } = getLineContextText(editor);
         const action = evaluateRules(before, after, settings.rules);

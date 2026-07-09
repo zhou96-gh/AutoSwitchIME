@@ -78,7 +78,9 @@ class VimModeListener : EditorFactoryListener {
                     return@invokeLater
                 }
 
-            if (!controller.getTrackedState().isAsciiMode) {
+            val isNormalLikeMode = VimModeChecker.isNormalLikeMode()
+
+            if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
                 val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
                 if (isComposing) {
                     AutoSwitchIMELogger.debug("VimModeListener: Rime is composing, skipping IME switch")
@@ -88,12 +90,12 @@ class VimModeListener : EditorFactoryListener {
                 }
             }
 
-            if (VimModeChecker.isInNormalMode()) {
+            if (isNormalLikeMode) {
                 if (ActionDeduplicator.shouldSkip(editor, ImeAction.ENGLISH)) {
                     AutoSwitchIMELogger.debug("VimModeListener: duplicated English action skipped")
-                    return@invokeLater
+                } else {
+                    AutoSwitchIMELogger.debug("VimModeListener (Normal-like mode): forcing ASCII (English)")
                 }
-                AutoSwitchIMELogger.debug("VimModeListener (Normal mode): forcing ASCII (English)")
                 controller.setAsciiMode(true)
                 CaretColorManager.updateCaretColor(editor, true, false)
             } else {

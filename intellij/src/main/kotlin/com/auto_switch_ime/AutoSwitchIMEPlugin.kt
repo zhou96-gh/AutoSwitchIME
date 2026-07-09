@@ -76,10 +76,16 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                     ActionDeduplicator.invalidate()
                     ApplicationManager.getApplication().invokeLater {
                         val editors = EditorFactory.getInstance().allEditors
-                        for (editor in editors) {
-                            if (!editor.isDisposed) {
-                                CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
-                            }
+                        val focusedEditor = editors.firstOrNull { !it.isDisposed && it.contentComponent.hasFocus() }
+                            ?: return@invokeLater
+                        val isNormalLikeMode = VimModeChecker.isNormalLikeMode()
+                        if (isNormalLikeMode && (!state.isAsciiMode || state.isCapsLock)) {
+                            ctrl.setAsciiMode(true)
+                        }
+                        if (isNormalLikeMode) {
+                            CaretColorManager.updateCaretColor(focusedEditor, true, false)
+                        } else {
+                            CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
                         }
                     }
                 }
@@ -158,7 +164,7 @@ class AutoSwitchIMEPlugin : ProjectActivity {
      * 更新编辑器状态 — 只需切换输入法，颜色由状态文件回调自动更新
      *
      * 无 IdeaVim 时：按 Insert 模式处理，使用正则规则切换输入法
-     * 有 IdeaVim 时：Normal/Visual 模式仅切换，Insert/Replace 模式也执行输入法切换
+     * 有 IdeaVim 时：只有 Insert 模式执行规则切换，其他 Vim 模式按 Normal 强制英文
      *
      * 注意：
      * - Rime 正在输入（显示候选词窗口）时跳过输入法切换
@@ -183,7 +189,9 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                     return@invokeLater
                 }
 
-            if (!controller.getTrackedState().isAsciiMode) {
+            val isNormalLikeMode = VimModeChecker.isNormalLikeMode()
+
+            if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
                 val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
                 if (isComposing) {
                     AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: Rime is composing, skipping IME switch")
@@ -193,12 +201,12 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                 }
             }
 
-            if (VimModeChecker.isInNormalMode()) {
+            if (isNormalLikeMode) {
                 if (ActionDeduplicator.shouldSkip(editor, ImeAction.ENGLISH)) {
                     AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: duplicated English action skipped")
-                    return@invokeLater
+                } else {
+                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Normal-like mode): forcing ASCII (English)")
                 }
-                AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Normal mode): forcing ASCII (English)")
                 controller.setAsciiMode(true)
                 CaretColorManager.updateCaretColor(editor, true, false)
             } else {

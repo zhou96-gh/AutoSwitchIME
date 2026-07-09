@@ -23,9 +23,8 @@ import com.auto_switch_ime.util.AutoSwitchIMELogger
  * IdeaVim 扩展：监听 Vim 模式变化，自动切换输入法并更新光标颜色
  *
  * 模式切换规则：
- * - Normal/Visual/Select/OP_PENDING → 强制英文（ASCII）
- * - Command-line (:) → 不变（保持当前 IME 状态）
- * - Insert/Replace → 评估正则规则：中文规则→中文, 大写规则→大写, 默认→英文
+ * - Insert → 评估正则规则：中文规则→中文, 大写规则→大写, 默认→英文
+ * - 其他 Vim 模式 → 按 Normal 处理，强制英文（ASCII）
  */
 class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
 
@@ -100,7 +99,9 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                 return@invokeLater
             }
 
-            if (!controller.getTrackedState().isAsciiMode) {
+            val isNormalLikeMode = currentMode !is Mode.INSERT
+
+            if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
                 val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
                 if (isComposing) {
                     AutoSwitchIMELogger.info("AutoSwitchIMEExtension: Rime is composing, skipping IME switch")
@@ -110,22 +111,19 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                 }
             }
 
+            if (isNormalLikeMode) {
+                if (ActionDeduplicator.shouldSkip(ijEditor, ImeAction.ENGLISH)) {
+                    AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: duplicated English action skipped")
+                } else {
+                    AutoSwitchIMELogger.info("Normal-like mode → forcing ASCII (English)")
+                }
+                controller.setAsciiMode(true)
+                CaretColorManager.updateCaretColor(ijEditor, true, false)
+                return@invokeLater
+            }
+
             when (currentMode) {
-                is Mode.NORMAL, is Mode.VISUAL, is Mode.SELECT, is Mode.OP_PENDING -> {
-                    if (ActionDeduplicator.shouldSkip(ijEditor, ImeAction.ENGLISH)) {
-                        AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: duplicated English action skipped")
-                        return@invokeLater
-                    }
-                    AutoSwitchIMELogger.info("Normal mode → forcing ASCII (English)")
-                    controller.setAsciiMode(true)
-                    CaretColorManager.updateCaretColor(ijEditor, true, false)
-                }
-
-                is Mode.CMD_LINE -> {
-                    AutoSwitchIMELogger.debug("Command-line mode → IME unchanged")
-                }
-
-                is Mode.INSERT, is Mode.REPLACE -> {
+                is Mode.INSERT -> {
                     val (before, after) = getLineContextText(ijEditor)
                     AutoSwitchIMELogger.info("Insert context: before='$before', after='$after'")
                     val settings = AutoSwitchIMESettings.instance

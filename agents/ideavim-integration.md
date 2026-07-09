@@ -22,11 +22,11 @@
 override fun modeChanged(editor: VimEditor, oldMode: Mode) {
     val currentMode = editor.mode
     when (currentMode) {
-        Mode.INSERT, Mode.REPLACE -> {
+        Mode.INSERT -> {
             // 正则规则评估 → 中文 / Caps / 英文
         }
         else -> {
-            // Normal/Visual/Select: 强制英文
+            // Normal/Visual/Select/Replace/Command-line/OP_PENDING: 强制英文
             rimeController.setAsciiMode(true)
         }
     }

@@ -39,8 +39,8 @@ export class CaretColorManager implements vscode.Disposable {
     this.originalCursorColor = all[CURSOR_FG] as string | undefined;
   }
 
-  async updateCaretColor(action: ImeAction): Promise<void> {
-    if (action === this.currentAction) return;
+  async updateCaretColor(action: ImeAction, force = false): Promise<void> {
+    if (!force && action === this.currentAction) return;
     this.currentAction = action;
 
     const all = readColorCustomizations();

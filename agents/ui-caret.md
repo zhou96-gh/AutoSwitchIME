@@ -22,7 +22,7 @@ object CaretColorManager {
 - `setAsciiMode()` / `setCapsMode()` 执行后
 - 编辑器创建时初始化
 - `ImeStateDetector.getCurrentState()` 检测到手动 IME 切换时更新
-- **颜色使用物理检测状态**而非 action target 值
+- **光标颜色必须跟随输入法规则产生的目标状态**：先按 Vim 模式/正则规则决定并执行输入法动作，再用同一个目标状态更新颜色；不能为了修颜色伪造独立的 IME 状态。
 
 ## VSCode — CaretColor.ts
 

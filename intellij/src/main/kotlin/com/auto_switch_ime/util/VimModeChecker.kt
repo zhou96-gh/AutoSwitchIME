@@ -23,19 +23,16 @@ object VimModeChecker {
     }
 
     /**
-     * 检查当前是否处于 Normal/Visual/Select 模式
+     * 检查当前是否处于需要按 Normal 处理的 Vim 模式
      * @return true 如果 IdeaVim 启用且当前模式要求英文输入
      */
-    fun isInNormalMode(): Boolean {
+    fun isNormalLikeMode(): Boolean {
         return try {
             if (!isIdeaVimEnabled()) return false
 
             val injector = com.maddyhome.idea.vim.api.injector
             val mode = injector.vimState.mode
-            mode is com.maddyhome.idea.vim.state.mode.Mode.NORMAL ||
-                mode is com.maddyhome.idea.vim.state.mode.Mode.VISUAL ||
-                mode is com.maddyhome.idea.vim.state.mode.Mode.SELECT ||
-                mode is com.maddyhome.idea.vim.state.mode.Mode.OP_PENDING
+            mode !is com.maddyhome.idea.vim.state.mode.Mode.INSERT
         } catch (e: Exception) {
             AutoSwitchIMELogger.debug("Failed to check Vim mode: ${e.message}")
             false

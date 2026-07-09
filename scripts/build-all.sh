@@ -15,6 +15,9 @@ echo "=== 3/3: VSCode 扩展 ==="
 cd /workspace/vscode
 npm install 2>&1
 npx vsce package --no-dependencies --allow-missing-repository 2>&1
+vscode_version="$(node -p "require('./package.json').version")"
+mkdir -p /workspace/packages
+cp "auto-switch-ime-${vscode_version}.vsix" "/workspace/packages/AutoSwitchIME-VSCode-${vscode_version}.vsix"
 echo "VSCode extension done"
 
 echo ""
