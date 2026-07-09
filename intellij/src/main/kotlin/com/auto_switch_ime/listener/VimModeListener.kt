@@ -78,7 +78,7 @@ class VimModeListener : EditorFactoryListener {
                     return@invokeLater
                 }
 
-            val isNormalLikeMode = VimModeChecker.isNormalLikeMode()
+            val isNormalLikeMode = VimModeChecker.isNormalLikeMode(editor)
 
             if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
                 val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)

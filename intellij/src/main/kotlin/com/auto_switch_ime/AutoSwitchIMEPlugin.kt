@@ -78,7 +78,7 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                         val editors = EditorFactory.getInstance().allEditors
                         val focusedEditor = editors.firstOrNull { !it.isDisposed && it.contentComponent.hasFocus() }
                             ?: return@invokeLater
-                        val isNormalLikeMode = VimModeChecker.isNormalLikeMode()
+                        val isNormalLikeMode = VimModeChecker.isNormalLikeMode(focusedEditor)
                         if (isNormalLikeMode && (!state.isAsciiMode || state.isCapsLock)) {
                             ctrl.setAsciiMode(true)
                         }
@@ -189,7 +189,7 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                     return@invokeLater
                 }
 
-            val isNormalLikeMode = VimModeChecker.isNormalLikeMode()
+            val isNormalLikeMode = VimModeChecker.isNormalLikeMode(editor)
 
             if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
                 val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)

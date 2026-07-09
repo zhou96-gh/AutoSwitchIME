@@ -18,6 +18,7 @@ import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
+import com.auto_switch_ime.util.VimModeChecker
 
 /**
  * IdeaVim 扩展：监听 Vim 模式变化，自动切换输入法并更新光标颜色
@@ -99,7 +100,10 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                 return@invokeLater
             }
 
-            val isNormalLikeMode = currentMode !is Mode.INSERT
+            val isNormalLikeMode = VimModeChecker.isNormalLikeMode(
+                currentMode,
+                ijEditor.selectionModel.hasSelection()
+            )
 
             if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
                 val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
@@ -154,6 +158,7 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                         }
                     }
                 }
+                else -> Unit
             }
         }
     }

@@ -86,9 +86,9 @@ export function activate(context: vscode.ExtensionContext): void {
   provider.onStateChanged = (state: ImeState) => {
     if (!isActive || !settings.enabled) return;
     invalidateLastAction();
-    if (isNormalLikeMode(modeDetector.currentMode)) {
+    const editor = vscode.window.activeTextEditor;
+    if (isNormalLikeMode(modeDetector.currentMode, hasSelection(editor))) {
       if (!vscode.window.state.focused) return;
-      const editor = vscode.window.activeTextEditor;
       if (editor) {
         updateEditorState(editor).catch((err) =>
           logger.warn('updateEditorState failed', err),
@@ -117,9 +117,9 @@ export function activate(context: vscode.ExtensionContext): void {
     if (current !== lastCapsState) {
       lastCapsState = current;
 
-      if (isNormalLikeMode(modeDetector.currentMode)) {
+      const editor = vscode.window.activeTextEditor;
+      if (isNormalLikeMode(modeDetector.currentMode, hasSelection(editor))) {
         if (!vscode.window.state.focused) return;
-        const editor = vscode.window.activeTextEditor;
         if (editor) {
           updateEditorState(editor).catch((err) =>
             logger.warn('updateEditorState failed', err),
@@ -241,7 +241,10 @@ async function onVimModeChanged(mode: VimMode): Promise<void> {
 
 async function initializeEditor(editor: vscode.TextEditor): Promise<void> {
   const tracked = provider.getTrackedState();
-  const normalLikeMode = isNormalLikeMode(modeDetector.currentMode);
+  const normalLikeMode = isNormalLikeMode(
+    modeDetector.currentMode,
+    hasSelection(editor),
+  );
   if (normalLikeMode) {
     await updateEditorState(editor);
     return;
@@ -291,7 +294,7 @@ async function updateEditorState(editor: vscode.TextEditor): Promise<void> {
       }
 
       const vimMode = modeDetector.currentMode;
-      const normalLikeMode = isNormalLikeMode(vimMode);
+      const normalLikeMode = isNormalLikeMode(vimMode, hasSelection(editor));
       const modeBefore = provider.currentAsciiMode;
       if (!normalLikeMode && !modeBefore) {
         const isComposing = await provider.isComposing();
@@ -361,6 +364,10 @@ function shouldSkipAction(editor: vscode.TextEditor, action: ImeAction): boolean
 
 function invalidateLastAction(): void {
   lastActionKey = null;
+}
+
+function hasSelection(editor: vscode.TextEditor | undefined): boolean {
+  return !!editor && !editor.selection.isEmpty;
 }
 
 function getLineContextText(editor: vscode.TextEditor): {

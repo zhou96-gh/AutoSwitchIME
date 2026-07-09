@@ -21,17 +21,16 @@
 ```kotlin
 override fun modeChanged(editor: VimEditor, oldMode: Mode) {
     val currentMode = editor.mode
-    when (currentMode) {
-        Mode.INSERT -> {
-            // 正则规则评估 → 中文 / Caps / 英文
-        }
-        else -> {
-            // Normal/Visual/Select/Replace/Command-line/OP_PENDING: 强制英文
-            rimeController.setAsciiMode(true)
-        }
+    if (VimModeChecker.isNormalLikeMode(currentMode, editor.ij.selectionModel.hasSelection())) {
+        // Normal/Visual/Select/Replace/Command-line/OP_PENDING/当前有选区: 强制英文
+        rimeController.setAsciiMode(true)
+    } else {
+        // Insert 且无选区：正则规则评估 → 中文 / Caps / 英文
     }
 }
 ```
+
+注意：只要当前编辑器存在活动选区，即使 IdeaVim 仍报告 `Mode.INSERT`，也必须按选中/Visual 模式处理并强制英文。
 
 ## 核心文件
 
