@@ -4,7 +4,6 @@ import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.util.Logger
 import java.io.File
 import java.nio.file.FileSystems
-import java.nio.file.Paths
 import java.nio.file.StandardWatchEventKinds
 import java.util.concurrent.TimeUnit
 
@@ -71,59 +70,75 @@ class StateWatcher(
     }
 
     private fun watchLoop() {
-        try {
-            val stateFile = File(stateFilePath)
+        val stateFile = File(stateFilePath)
 
-            // 确保状态文件存在
-            if (!stateFile.exists()) {
-                stateFile.parentFile?.mkdirs()
-                stateFile.createNewFile()
-                logger.debug("Created initial state file: $stateFilePath")
-            }
+        while (isRunning && !Thread.currentThread().isInterrupted) {
+            var shouldRestart = false
+            var watchService: java.nio.file.WatchService? = null
+            try {
+                // 确保状态文件存在
+                if (!stateFile.exists()) {
+                    stateFile.parentFile?.mkdirs()
+                    stateFile.createNewFile()
+                    logger.debug("Created initial state file: $stateFilePath")
+                }
 
-            val parentDir = stateFile.parentFile.toPath()
-            val watchService = FileSystems.getDefault().newWatchService()
-            val fileName = stateFile.name
+                val parentDir = stateFile.parentFile.toPath()
+                val service = FileSystems.getDefault().newWatchService()
+                watchService = service
+                val fileName = stateFile.name
 
-            // 监听父目录
-            parentDir.register(
-                watchService,
-                StandardWatchEventKinds.ENTRY_MODIFY,
-                StandardWatchEventKinds.ENTRY_CREATE
-            )
+                // 监听父目录
+                parentDir.register(
+                    service,
+                    StandardWatchEventKinds.ENTRY_MODIFY,
+                    StandardWatchEventKinds.ENTRY_CREATE
+                )
 
-            logger.debug("Watching directory: $parentDir for $fileName changes")
+                logger.debug("Watching directory: $parentDir for $fileName changes")
 
-            while (isRunning && !Thread.currentThread().isInterrupted) {
-                val watchKey = watchService.poll(500, TimeUnit.MILLISECONDS) ?: continue
+                while (isRunning && !Thread.currentThread().isInterrupted) {
+                    val watchKey = service.poll(500, TimeUnit.MILLISECONDS) ?: continue
 
-                for (event in watchKey.pollEvents()) {
-                    val context = event.context()?.toString() ?: continue
-                    if (context.contains("ime-state") || context == fileName) {
-                        readAndApplyState()
+                    for (event in watchKey.pollEvents()) {
+                        val context = event.context()?.toString() ?: continue
+                        if (context.contains("ime-state") || context == fileName) {
+                            readAndApplyState()
+                            break
+                        }
+                    }
+
+                    // 重置 watch key 以继续监听
+                    if (!watchKey.reset()) {
+                        logger.warn("Watch key no longer valid, restarting watcher")
+                        shouldRestart = true
                         break
                     }
                 }
-
-                // 重置 watch key 以继续监听
-                if (!watchKey.reset()) {
-                    logger.warn("Watch key no longer valid, restarting watcher")
-                    watchService.close()
-                    // 重新创建 watcher
-                    Thread.sleep(1000)
-                    if (isRunning) {
-                        watchLoop()
-                    }
-                    return
+            } catch (e: InterruptedException) {
+                logger.debug("StateWatcher interrupted")
+                Thread.currentThread().interrupt()
+            } catch (e: Exception) {
+                logger.warn("Error in StateWatcher: ${e.message}", e)
+                shouldRestart = isRunning && !Thread.currentThread().isInterrupted
+            } finally {
+                try {
+                    watchService?.close()
+                } catch (_: Exception) {
+                    // Ignore close failures during watcher restart/shutdown.
                 }
             }
 
-            watchService.close()
-        } catch (e: InterruptedException) {
-            logger.debug("StateWatcher interrupted")
-            Thread.currentThread().interrupt()
-        } catch (e: Exception) {
-            logger.warn("Error in StateWatcher: ${e.message}", e)
+            if (shouldRestart && isRunning && !Thread.currentThread().isInterrupted) {
+                try {
+                    Thread.sleep(1000)
+                } catch (e: InterruptedException) {
+                    logger.debug("StateWatcher interrupted")
+                    Thread.currentThread().interrupt()
+                }
+            } else {
+                break
+            }
         }
     }
 
@@ -141,7 +156,7 @@ class StateWatcher(
             val content = stateFile.readText(Charsets.UTF_8).trim()
             if (content.isEmpty()) return
 
-            val state = parseStateJson(content) ?: return
+            val state = parseImeStateJson(content) ?: return
 
             // 检测状态是否发生变化
             if (state.isAsciiMode != lastAsciiMode || state.isCapsLock != lastCapsLock || state.isComposing != isComposing) {
@@ -161,21 +176,22 @@ class StateWatcher(
         }
     }
 
-    private fun parseStateJson(json: String): ImeState? {
-        return try {
-            val asciiMode = extractBoolean(json, "ascii_mode") ?: return null
-            val capsLock = extractBoolean(json, "caps_lock") ?: false
-            val isComposing = extractBoolean(json, "is_composing") ?: false
-            ImeState(asciiMode, capsLock, isComposing)
-        } catch (e: Exception) {
-            null
-        }
-    }
+}
 
-    private fun extractBoolean(json: String, key: String): Boolean? {
-        val pattern = """"$key"\s*:\s*(true|false)"""
-        val regex = Regex(pattern)
-        val match = regex.find(json) ?: return null
-        return match.groupValues[1].toBoolean()
+internal fun parseImeStateJson(json: String): ImeState? {
+    return try {
+        val asciiMode = extractBoolean(json, "ascii_mode") ?: return null
+        val capsLock = extractBoolean(json, "caps_lock") ?: false
+        val isComposing = extractBoolean(json, "is_composing") ?: false
+        ImeState(asciiMode, capsLock, isComposing)
+    } catch (e: Exception) {
+        null
     }
+}
+
+private fun extractBoolean(json: String, key: String): Boolean? {
+    val pattern = """"$key"\s*:\s*(true|false)"""
+    val regex = Regex(pattern)
+    val match = regex.find(json) ?: return null
+    return match.groupValues[1].toBoolean()
 }

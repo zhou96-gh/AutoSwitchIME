@@ -16,6 +16,14 @@
 
 ## Docker 构建
 
+### 容器重建与清理边界
+
+- 平时运行测试或重新创建容器不需要重建镜像；只有 `Dockerfile`、`docker-compose.yml` 或基础工具链版本变化时才运行 `docker compose build`。
+- 本项目的开发容器用于测试、构建和打包，默认按 `docker compose run --rm dev ...` 临时容器使用；不作为常驻服务接入 Supervisor。
+- “清理容器垃圾”默认只清理本项目临时容器、无用网络和 Docker build cache，例如 `docker compose down --remove-orphans`、`docker builder prune -f`。
+- 未经明确要求，不删除 `rimevim-dev:latest` 镜像、`rimevimime_*` 依赖缓存 volume、`vscode/node_modules/`、`ime-sys/target/`、`packages/` 等可复用依赖缓存或产物。
+- 只有用户明确要求“全清/重新下载依赖/删除镜像或 volume”时，才删除镜像、volume 或工作区构建产物。
+
 ### 版本要求
 
 打包前必须根据本次改动更新版本号，不能用旧版本重复打包。
@@ -30,6 +38,12 @@
 - `gradle.properties` 的 `pluginVersion`
 - `vscode/package.json` 的 `version`
 - `vscode/package-lock.json` 顶部根包版本
+
+打包前先运行版本一致性检查；`scripts/build-all.sh` 已内置该检查：
+
+```bash
+python3 -B scripts/check-version-consistency.py
+```
 
 ```bash
 # 构建镜像

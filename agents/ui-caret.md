@@ -20,6 +20,8 @@ object CaretColorManager {
 
 ### 调用时机
 - `setAsciiMode()` / `setCapsMode()` 执行后
+- IntelliJ Coordinator 完成切换后回到 EDT 更新；回调前必须确认请求代次、目标 editor 和焦点仍有效，避免快速切换文件后旧请求覆盖新编辑器颜色
+- Coordinator 在真正调用 WeaselServer、修改 CapsLock 以及更新 UI 前都必须检查请求有效性，避免队列延迟影响其他应用的全局输入法状态
 - 编辑器/窗口失焦时释放插件自己开启的 CapsLock 后
 - 编辑器创建时初始化
 - `ImeStateDetector.getCurrentState()` 检测到手动 IME 切换时更新

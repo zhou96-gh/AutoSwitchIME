@@ -27,7 +27,7 @@ function getStateFileName(type: ImeType): string {
  * 解析状态 JSON 中的布尔值
  * 使用正则提取，避免 JSON.parse 对不完整文件报错
  */
-function parseStateJson(content: string): ImeState | null {
+export function parseStateJson(content: string): ImeState | null {
   try {
     const asciiMode = extractBoolean(content, 'ascii_mode');
     if (asciiMode === null) return null;

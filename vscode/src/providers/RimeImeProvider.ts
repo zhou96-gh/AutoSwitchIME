@@ -121,7 +121,11 @@ export class RimeImeProvider implements ImeProvider {
     this.stateWatcher.start();
   }
 
-  async setAsciiMode(ascii: boolean): Promise<void> {
+  async setAsciiMode(
+    ascii: boolean,
+    shouldContinue: () => boolean = () => true,
+  ): Promise<void> {
+    if (!shouldContinue()) return;
     this.stateWatcher.isForcingImeSwitch = true;
     try {
       const capsOn = nativeCapsRead();
@@ -131,11 +135,14 @@ export class RimeImeProvider implements ImeProvider {
 
       // 只关闭插件自己开启的 CapsLock，不影响用户手动开启的全局 CapsLock。
       if (capsOn && this.ownsCapsLock) {
-        await this.forceCapsOff();
+        if (!shouldContinue()) return;
+        await this.forceCapsOff(shouldContinue);
+        if (!shouldContinue()) return;
         this.ownsCapsLock = false;
       }
 
       if (alreadyAscii) return;
+      if (!shouldContinue()) return;
 
       this.currentAsciiMode = ascii;
       await this.switchImeMode(ascii ? '/ascii' : '/nascii');
@@ -147,10 +154,14 @@ export class RimeImeProvider implements ImeProvider {
   /** 确保 Weasel 在英文模式，但保留 CapsLock 状态不变
    *  用于 poll timer 处理手动 CapsLock：用户自己按了 CapsLock，不应该被自动关闭
    */
-  async ensureAsciiMode(): Promise<void> {
+  async ensureAsciiMode(
+    shouldContinue: () => boolean = () => true,
+  ): Promise<void> {
+    if (!shouldContinue()) return;
     this.stateWatcher.isForcingImeSwitch = true;
     try {
       if (!this.currentAsciiMode) {
+        if (!shouldContinue()) return;
         this.currentAsciiMode = true;
         await this.switchImeMode('/ascii');
       }
@@ -159,7 +170,10 @@ export class RimeImeProvider implements ImeProvider {
     }
   }
 
-  async setCapsMode(): Promise<void> {
+  async setCapsMode(
+    shouldContinue: () => boolean = () => true,
+  ): Promise<void> {
+    if (!shouldContinue()) return;
     this.stateWatcher.isForcingImeSwitch = true;
     try {
       const capsOnBefore = nativeCapsRead();
@@ -168,14 +182,17 @@ export class RimeImeProvider implements ImeProvider {
       // Caps 模式 = WeaselServer 英文模式 + CapsLock 开启
       // 确保 WeaselServer 在英文模式（/ascii），这样输出大写英文字母
       if (!this.currentAsciiMode) {
+        if (!shouldContinue()) return;
         this.currentAsciiMode = true;
         await this.switchImeMode('/ascii');
       }
 
       // 开启 CapsLock（含重试 + 验证）
+      if (!shouldContinue()) return;
       if (!nativeCapsRead()) {
-        await this.forceCapsOn();
+        await this.forceCapsOn(shouldContinue);
         this.ownsCapsLock = nativeCapsRead();
+        if (!shouldContinue()) return;
       } else {
         this.ownsCapsLock = false;
       }
@@ -204,20 +221,22 @@ export class RimeImeProvider implements ImeProvider {
   }
 
   /** 强制开启 CapsLock，最多重试 5 次，每次间隔 50ms */
-  private async forceCapsOn(): Promise<void> {
+  private async forceCapsOn(shouldContinue: () => boolean): Promise<void> {
     for (let i = 0; i < 5; i++) {
       if (nativeCapsRead()) return;
-      if (!isNativeAvailable()) return;
+      if (!isNativeAvailable() || !shouldContinue()) return;
       nativeCapsSet(true);
       await this.sleepAsync(50);
     }
   }
 
   /** 强制关闭 CapsLock，最多重试 5 次，每次间隔 50ms */
-  private async forceCapsOff(): Promise<void> {
+  private async forceCapsOff(
+    shouldContinue: () => boolean = () => true,
+  ): Promise<void> {
     for (let i = 0; i < 5; i++) {
       if (!nativeCapsRead()) return;
-      if (!isNativeAvailable()) return;
+      if (!isNativeAvailable() || !shouldContinue()) return;
       nativeCapsSet(false);
       await this.sleepAsync(50);
     }

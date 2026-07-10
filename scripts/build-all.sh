@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+echo "=== 0/3: 版本一致性 ==="
+cd /workspace
+python3 -B scripts/check-version-consistency.py
+
 echo "=== 1/3: Rust 原生模块 ==="
 cd /workspace/ime-sys
 cargo build --release --target x86_64-pc-windows-gnu 2>&1

@@ -2,7 +2,7 @@
 
 IntelliJ/VSCode 插件：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。
 
-**当前版本**: v2.2.18
+**当前版本**: v2.2.21
 
 ## 开发环境
 
@@ -27,7 +27,7 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 | UI/光标 | [`agents/ui-caret.md`](agents/ui-caret.md) | 光标颜色管理（IntelliJ+VSCode） |
 | 设置面板 | [`agents/settings.md`](agents/settings.md) | 配置项、正则规则（IntelliJ+VSCode） |
 | 已知问题 | [`agents/issues.md`](agents/issues.md) | 版本日志、待完成、已知 bug |
-| 架构设计 | [`docs/superpowers/specs/2026-05-23-rimevim-multi-editor-design.md`](docs/superpowers/specs/2026-05-23-rimevim-multi-editor-design.md) | 多编辑器架构设计 |
+| 架构设计 | [`docs/superpowers/specs/2026-07-10-ime-coordinator-actor-design.md`](docs/superpowers/specs/2026-07-10-ime-coordinator-actor-design.md) | 输入法 Coordinator Actor 与多编辑器调度 |
 
 ## 快速参考
 

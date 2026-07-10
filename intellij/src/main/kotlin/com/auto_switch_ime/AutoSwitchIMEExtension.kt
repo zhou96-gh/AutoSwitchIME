@@ -10,13 +10,10 @@ import com.maddyhome.idea.vim.extension.VimExtension
 import com.maddyhome.idea.vim.newapi.ij
 import com.maddyhome.idea.vim.state.mode.Mode
 import com.auto_switch_ime.caret.CaretColorManager
-import com.auto_switch_ime.core.ImeAction
 import com.auto_switch_ime.core.ime.ImeStateDetector
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
-import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
-import com.auto_switch_ime.util.InsertModeDecision
 import com.auto_switch_ime.util.VimModeChecker
 
 /**
@@ -94,70 +91,15 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
                 return@invokeLater
             }
 
-            if (!ijEditor.contentComponent.hasFocus()) {
-                AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: editor not focused, skipping IME switch")
-                return@invokeLater
-            }
-
             val isNormalLikeMode = VimModeChecker.isNormalLikeMode(
                 currentMode,
                 ijEditor.selectionModel.hasSelection()
             )
-
-            if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
-                val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
-                if (isComposing) {
-                    AutoSwitchIMELogger.info("AutoSwitchIMEExtension: Rime is composing, skipping IME switch")
-                    val state = controller.getTrackedState()
-                    CaretColorManager.updateCaretColor(ijEditor, state.isAsciiMode, state.isCapsLock)
-                    return@invokeLater
-                }
-            }
-
-            if (isNormalLikeMode) {
-                if (ActionDeduplicator.shouldSkip(ijEditor, ImeAction.ENGLISH)) {
-                    AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: duplicated English action skipped")
-                } else {
-                    AutoSwitchIMELogger.info("Normal-like mode → forcing ASCII (English)")
-                }
-                controller.setAsciiMode(true)
-                CaretColorManager.updateCaretColor(ijEditor, true, false)
-                return@invokeLater
-            }
-
-            when (currentMode) {
-                is Mode.INSERT -> {
-                    val decision = InsertModeDecision.evaluate(ijEditor)
-                    AutoSwitchIMELogger.info("Insert context: before='${decision.context.before}', after='${decision.context.after}'")
-                    val action = decision.action
-                    if (ActionDeduplicator.shouldSkip(ijEditor, action)) {
-                        AutoSwitchIMELogger.debug("AutoSwitchIMEExtension: duplicated $action action skipped")
-                        return@invokeLater
-                    }
-
-                    when (action) {
-                        ImeAction.CHINESE -> {
-                            AutoSwitchIMELogger.info("Insert mode → Chinese (regex matched)")
-                            controller.setAsciiMode(false)
-                            CaretColorManager.updateCaretColor(ijEditor, false, false)
-                        }
-                        ImeAction.CAPS -> {
-                            AutoSwitchIMELogger.info("Insert mode → Caps (regex matched)")
-                            controller.setCapsMode()
-                            CaretColorManager.updateCaretColor(ijEditor, true, true)
-                        }
-                        ImeAction.ENGLISH -> {
-                            AutoSwitchIMELogger.info("Insert mode → English (default)")
-                            controller.setAsciiMode(true)
-                            CaretColorManager.updateCaretColor(ijEditor, true, false)
-                        }
-                        ImeAction.UNCHANGED -> {
-                            AutoSwitchIMELogger.debug("Insert mode → IME unchanged")
-                        }
-                    }
-                }
-                else -> Unit
-            }
+            controller.requestEditorUpdate(
+                editor = ijEditor,
+                source = "AutoSwitchIMEExtension",
+                normalLikeOverride = isNormalLikeMode
+            )
         }
     }
 

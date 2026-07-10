@@ -23,24 +23,30 @@ core/ (Kotlin)
 └── StateWatcher (WatchService 监听状态文件)
 
 intellij/ (Kotlin + JNA)
-└── AutoSwitchIMEPlugin: 插件入口，加载 NativeImeSys
+├── AutoSwitchIMEPlugin: 插件入口，加载 NativeImeSys
+└── AutoSwitchIMEController: Coordinator Actor，串行处理编辑器、焦点和物理状态事件
 
 vscode/ (TypeScript + koffi)
 ├── native.ts: koffi → ime_sys.dll（FFI 直接调用）
 ├── RimeImeProvider.ts: ImeProvider 实现
 ├── StateWatcher.ts: fs.watchFile 监听状态文件
-└── extension.ts: 插件入口
+├── ImeCoordinator.ts: Promise mailbox，串行处理全部输入法事件
+└── extension.ts: 插件入口和事件监听器装配
 ```
 
 ## 核心链路
 
-Vim 模式变化 → RimeImeProvider:
+Vim/编辑器/焦点/物理状态变化 → Coordinator → RimeImeProvider:
 1. `setCapsMode()`: nativeCapsSet(true) → 物理开启 CapsLock
 2. `setAsciiMode(ascii)`: 必要时释放插件自己开启的 CapsLock + WeaselServer.exe /ascii|/nascii
 3. `getTrackedState()`: ascii_mode 来自跟踪值, caps_lock 来自即时物理读
 4. `isComposing()`: 优先 native ime_is_composing(), 失败时 fallback 状态文件
 
-Provider 内部会串行化切换请求，并在目标状态已满足时直接返回，避免多入口重复触发外部 `WeaselServer.exe` 调用。
+Coordinator 是唯一自动切换入口：事件邮箱严格串行，新编辑上下文会使旧请求失效，失焦和关闭事件会清空待处理上下文并释放插件持有的 CapsLock。Provider 只执行系统操作、读取物理状态和跟踪自身 IME 状态。
+
+IntelliJ 和 VSCode 的 UI/监听器入口不得直接调用 Provider；必须向各自 Coordinator 提交事件。同步方法只允许控制器内部或非 UI 诊断路径使用，避免 `WeaselServer.exe` 等外部调用阻塞界面。
+
+所有会修改系统全局输入法或 CapsLock 的自动切换请求，必须在实际执行前确认触发它的 IDE/VSCode 窗口和编辑器仍处于焦点中；失焦后只允许释放插件自己开启的 CapsLock，不允许继续执行排队中的上下文切换。
 
 物理 CapsLock 是唯一真相源，无软件镜像状态。
 

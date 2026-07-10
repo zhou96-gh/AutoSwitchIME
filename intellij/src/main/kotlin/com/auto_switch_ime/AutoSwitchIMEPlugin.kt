@@ -16,17 +16,12 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.util.Alarm
 import com.auto_switch_ime.caret.CaretColorManager
-import com.auto_switch_ime.core.ImeAction
-import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.ime.ImeStateDetector
 import com.auto_switch_ime.core.ime.NativeImeSys
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.ime.AutoSwitchIMEStateWatcher
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
-import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
-import com.auto_switch_ime.util.InsertModeDecision
-import com.auto_switch_ime.util.VimModeChecker
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.util.Collections
@@ -74,27 +69,8 @@ class AutoSwitchIMEPlugin : ProjectActivity {
             cachedStateWatcher?.start()
             AutoSwitchIMELogger.info("AutoSwitchIMEStateWatcher started for manual IME switching detection")
 
-            // 状态文件变化回调：实际 IME 状态变化时更新颜色
             val ctrl = ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
-            if (ctrl != null) {
-                ctrl.onStateChanged = { state: ImeState ->
-                    ActionDeduplicator.invalidate()
-                    ApplicationManager.getApplication().invokeLater {
-                        val editors = EditorFactory.getInstance().allEditors
-                        val focusedEditor = editors.firstOrNull { !it.isDisposed && it.contentComponent.hasFocus() }
-                            ?: return@invokeLater
-                        val isNormalLikeMode = VimModeChecker.isNormalLikeMode(focusedEditor)
-                        if (isNormalLikeMode && (!state.isAsciiMode || state.isCapsLock)) {
-                            ctrl.setAsciiMode(true)
-                        }
-                        if (isNormalLikeMode) {
-                            CaretColorManager.updateCaretColor(focusedEditor, true, false)
-                        } else {
-                            CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
-                        }
-                    }
-                }
-            }
+            cachedController = ctrl
 
             AutoSwitchIMELogger.info("AutoSwitchIME IME initialized for project: ${project.name}")
 
@@ -177,7 +153,15 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                     .getService(AutoSwitchIMEController::class.java)
                     .also { cachedController = it }
                     ?: return
-                controller.releaseOwnedCapsLock()
+                controller.onEditorFocusLost(editor)
+            }
+
+            override fun focusGained(e: FocusEvent?) {
+                val controller = cachedController ?: ApplicationManager.getApplication()
+                    .getService(AutoSwitchIMEController::class.java)
+                    .also { cachedController = it }
+                    ?: return
+                controller.onEditorFocusGained(editor)
             }
         })
     }
@@ -193,73 +177,11 @@ class AutoSwitchIMEPlugin : ProjectActivity {
      */
     private fun updateEditorState(editor: Editor) {
         if (!AutoSwitchIMESettings.instance.enabled) return
-
-        ApplicationManager.getApplication().invokeLater {
-            if (editor.isDisposed) return@invokeLater
-
-            // 编辑器未聚焦时不执行自动切换
-            if (!editor.contentComponent.hasFocus()) {
-                AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: editor not focused, skipping IME switch")
-                return@invokeLater
-            }
-
-            val controller = cachedController ?: ApplicationManager.getApplication()
-                .getService(AutoSwitchIMEController::class.java)
-                .also { cachedController = it }
-                ?: run {
-                    AutoSwitchIMELogger.warn("AutoSwitchIMEController not available, skipping IME switch")
-                    return@invokeLater
-                }
-
-            val isNormalLikeMode = VimModeChecker.isNormalLikeMode(editor)
-
-            if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
-                val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
-                if (isComposing) {
-                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: Rime is composing, skipping IME switch")
-                    val state = controller.getTrackedState()
-                    CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
-                    return@invokeLater
-                }
-            }
-
-            if (isNormalLikeMode) {
-                if (ActionDeduplicator.shouldSkip(editor, ImeAction.ENGLISH)) {
-                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: duplicated English action skipped")
-                } else {
-                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Normal-like mode): forcing ASCII (English)")
-                }
-                controller.setAsciiMode(true)
-                CaretColorManager.updateCaretColor(editor, true, false)
-            } else {
-                val action = InsertModeDecision.evaluate(editor).action
-                if (ActionDeduplicator.shouldSkip(editor, action)) {
-                    AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin: duplicated $action action skipped")
-                    return@invokeLater
-                }
-
-                when (action) {
-                    ImeAction.CHINESE -> {
-                        AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Chinese mode")
-                        controller.setAsciiMode(false)
-                        CaretColorManager.updateCaretColor(editor, false, false)
-                    }
-                    ImeAction.CAPS -> {
-                        AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): Caps mode")
-                        controller.setCapsMode()
-                        CaretColorManager.updateCaretColor(editor, true, true)
-                    }
-                    ImeAction.ENGLISH -> {
-                        AutoSwitchIMELogger.info("AutoSwitchIMEPlugin (Insert mode): English mode")
-                        controller.setAsciiMode(true)
-                        CaretColorManager.updateCaretColor(editor, true, false)
-                    }
-                    ImeAction.UNCHANGED -> {
-                        AutoSwitchIMELogger.debug("AutoSwitchIMEPlugin (Insert mode): IME unchanged")
-                    }
-                }
-            }
-        }
+        val controller = cachedController ?: ApplicationManager.getApplication()
+            .getService(AutoSwitchIMEController::class.java)
+            .also { cachedController = it }
+            ?: return
+        controller.requestEditorUpdate(editor, "AutoSwitchIMEPlugin")
     }
 
     /**

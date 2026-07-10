@@ -8,15 +8,9 @@ import com.intellij.openapi.editor.event.EditorMouseEvent
 import com.intellij.openapi.editor.event.EditorMouseListener
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
-import com.auto_switch_ime.core.ImeAction
-import com.auto_switch_ime.caret.CaretColorManager
-import com.auto_switch_ime.core.ime.ImeStateDetector
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
-import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
-import com.auto_switch_ime.util.InsertModeDecision
-import com.auto_switch_ime.util.VimModeChecker
 
 /**
  * 编辑器工厂监听器：处理编辑器创建、文件切换、鼠标进入事件
@@ -62,70 +56,8 @@ class VimModeListener : EditorFactoryListener {
      */
     private fun updateEditorState(editor: Editor) {
         if (!AutoSwitchIMESettings.instance.enabled) return
-
-        ApplicationManager.getApplication().invokeLater {
-            if (editor.isDisposed) return@invokeLater
-
-            // 编辑器未聚焦时不执行自动切换
-            if (!editor.contentComponent.hasFocus()) {
-                AutoSwitchIMELogger.debug("VimModeListener: editor not focused, skipping IME switch")
-                return@invokeLater
-            }
-
-            val controller = ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
-                ?: run {
-                    AutoSwitchIMELogger.warn("AutoSwitchIMEController not available, skipping IME switch")
-                    return@invokeLater
-                }
-
-            val isNormalLikeMode = VimModeChecker.isNormalLikeMode(editor)
-
-            if (!isNormalLikeMode && !controller.getTrackedState().isAsciiMode) {
-                val isComposing = ImeStateDetector.isComposing(controller.stateWatcher)
-                if (isComposing) {
-                    AutoSwitchIMELogger.debug("VimModeListener: Rime is composing, skipping IME switch")
-                    val state = controller.getTrackedState()
-                    CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
-                    return@invokeLater
-                }
-            }
-
-            if (isNormalLikeMode) {
-                if (ActionDeduplicator.shouldSkip(editor, ImeAction.ENGLISH)) {
-                    AutoSwitchIMELogger.debug("VimModeListener: duplicated English action skipped")
-                } else {
-                    AutoSwitchIMELogger.debug("VimModeListener (Normal-like mode): forcing ASCII (English)")
-                }
-                controller.setAsciiMode(true)
-                CaretColorManager.updateCaretColor(editor, true, false)
-            } else {
-                val action = InsertModeDecision.evaluate(editor).action
-                if (ActionDeduplicator.shouldSkip(editor, action)) {
-                    AutoSwitchIMELogger.debug("VimModeListener: duplicated $action action skipped")
-                    return@invokeLater
-                }
-
-                when (action) {
-                    ImeAction.CHINESE -> {
-                        AutoSwitchIMELogger.info("VimModeListener (Insert mode): Chinese mode")
-                        controller.setAsciiMode(false)
-                        CaretColorManager.updateCaretColor(editor, false, false)
-                    }
-                    ImeAction.CAPS -> {
-                        AutoSwitchIMELogger.info("VimModeListener (Insert mode): Caps mode")
-                        controller.setCapsMode()
-                        CaretColorManager.updateCaretColor(editor, true, true)
-                    }
-                    ImeAction.ENGLISH -> {
-                        AutoSwitchIMELogger.info("VimModeListener (Insert mode): English mode")
-                        controller.setAsciiMode(true)
-                        CaretColorManager.updateCaretColor(editor, true, false)
-                    }
-                    ImeAction.UNCHANGED -> {
-                        AutoSwitchIMELogger.debug("VimModeListener (Insert mode): IME unchanged")
-                    }
-                }
-            }
-        }
+        val controller = ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
+            ?: return
+        controller.requestEditorUpdate(editor, "VimModeListener")
     }
 }

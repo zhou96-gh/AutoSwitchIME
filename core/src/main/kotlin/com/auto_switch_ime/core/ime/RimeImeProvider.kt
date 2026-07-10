@@ -44,7 +44,12 @@ class RimeImeProvider(
     }
 
     override suspend fun setAsciiMode(ascii: Boolean) {
+        setAsciiMode(ascii) { true }
+    }
+
+    suspend fun setAsciiMode(ascii: Boolean, shouldContinue: () -> Boolean) {
         synchronized(switchLock) {
+            if (!shouldContinue()) return
             stateWatcher.isForcingImeSwitch = true
             try {
                 val capsOn = NativeImeSys.imeCapsRead()
@@ -52,12 +57,14 @@ class RimeImeProvider(
                 if (currentAsciiMode == ascii && !capsOn) return
 
                 if (capsOn && ownsCapsLock) {
+                    if (!shouldContinue()) return
                     logger.debug("Exiting caps mode before switching IME mode")
                     NativeImeSys.imeCapsSet(false)
                     ownsCapsLock = false
                 }
 
                 if (currentAsciiMode == ascii) return
+                if (!shouldContinue()) return
 
                 currentAsciiMode = ascii
                 switchImeMode(if (ascii) "/ascii" else "/nascii", if (ascii) "ASCII" else "Chinese")
@@ -68,7 +75,12 @@ class RimeImeProvider(
     }
 
     override suspend fun setCapsMode() {
+        setCapsMode { true }
+    }
+
+    suspend fun setCapsMode(shouldContinue: () -> Boolean) {
         synchronized(switchLock) {
+            if (!shouldContinue()) return
             stateWatcher.isForcingImeSwitch = true
             try {
                 val capsOnBefore = NativeImeSys.imeCapsRead()
@@ -77,11 +89,13 @@ class RimeImeProvider(
                 // Caps 模式 = WeaselServer 英文模式 + CapsLock 开启
                 // 先确保 WeaselServer 在英文模式（/ascii），这样输出大写英文字母
                 if (!currentAsciiMode) {
+                    if (!shouldContinue()) return
                     currentAsciiMode = true
                     switchImeMode("/ascii", "ASCII")
                 }
 
                 // 再开启 CapsLock
+                if (!shouldContinue()) return
                 if (!NativeImeSys.imeCapsRead()) {
                     NativeImeSys.imeCapsSet(true)
                     ownsCapsLock = NativeImeSys.imeCapsRead()
