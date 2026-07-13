@@ -19,8 +19,8 @@ class CoordinatorStateTest {
 
         assertNotNull(requestA)
         assertNotNull(requestB)
-        assertFalse(state.isCurrent(requestA!!))
-        assertTrue(state.isCurrent(requestB!!))
+        assertFalse(state.isCurrent(requestA!!, platformFocused = true))
+        assertTrue(state.isCurrent(requestB!!, platformFocused = true))
     }
 
     @Test
@@ -31,8 +31,17 @@ class CoordinatorStateTest {
 
         state.loseFocus()
 
-        assertFalse(state.isCurrent(request))
+        assertFalse(state.isCurrent(request, platformFocused = true))
         assertNull(state.newRequest("editor-a"))
+    }
+
+    @Test
+    fun `external focus loss invalidates current request before focus event arrives`() {
+        val state = CoordinatorState<String>()
+        state.focusEditor("editor-a")
+        val request = state.newRequest("editor-a")!!
+
+        assertFalse(state.isCurrent(request, platformFocused = false))
     }
 
     @Test
@@ -43,7 +52,7 @@ class CoordinatorStateTest {
 
         state.focusEditor("editor-a")
 
-        assertTrue(state.isCurrent(request))
+        assertTrue(state.isCurrent(request, platformFocused = true))
     }
 
     @Test
@@ -54,7 +63,7 @@ class CoordinatorStateTest {
 
         state.invalidateRequests()
 
-        assertFalse(state.isCurrent(request))
+        assertFalse(state.isCurrent(request, platformFocused = true))
     }
 
     @Test
@@ -65,7 +74,7 @@ class CoordinatorStateTest {
 
         state.loseFocus("editor-a")
 
-        assertTrue(state.isCurrent(request))
+        assertTrue(state.isCurrent(request, platformFocused = true))
     }
 
     @Test

@@ -172,7 +172,7 @@ class AutoSwitchIMEController : Disposable {
     }
 
     private fun handleEditorContext(event: CoordinatorEvent.EditorContext) {
-        if (!coordinatorState.isCurrent(event.request)) return
+        if (!isCurrent(event)) return
 
         if (!event.normalLike && !provider.getTrackedState().isAsciiMode) {
             val composing = ImeStateDetector.isComposing(provider.stateWatcher)
@@ -187,7 +187,7 @@ class AutoSwitchIMEController : Disposable {
             AutoSwitchIMELogger.info("Insert context: before='${it.before}', after='${it.after}'")
         }
 
-        val isCurrent = { coordinatorState.isCurrent(event.request) }
+        val isCurrent = { isCurrent(event) }
         runBlocking {
             when (event.action) {
                 ImeAction.CHINESE -> provider.setAsciiMode(false, isCurrent)
@@ -209,14 +209,15 @@ class AutoSwitchIMEController : Disposable {
 
     private fun updateCaretWhenCurrent(event: CoordinatorEvent.EditorContext, state: ImeState) {
         ApplicationManager.getApplication().invokeLater {
-            if (
-                coordinatorState.isCurrent(event.request) &&
-                !event.editor.isDisposed &&
-                event.editor.contentComponent.hasFocus()
-            ) {
+            if (isCurrent(event)) {
                 CaretColorManager.updateCaretColor(event.editor, state.isAsciiMode, state.isCapsLock)
             }
         }
+    }
+
+    private fun isCurrent(event: CoordinatorEvent.EditorContext): Boolean {
+        val platformFocused = !event.editor.isDisposed && event.editor.contentComponent.hasFocus()
+        return coordinatorState.isCurrent(event.request, platformFocused)
     }
 
     private fun handleFocusLost(event: CoordinatorEvent.FocusLost) {

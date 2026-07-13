@@ -13,8 +13,8 @@ test('new active editor invalidates previous request', () => {
 
   assert.ok(requestA);
   assert.ok(requestB);
-  assert.equal(state.isCurrent(requestA), false);
-  assert.equal(state.isCurrent(requestB), true);
+  assert.equal(state.isCurrent(requestA, true), false);
+  assert.equal(state.isCurrent(requestB, true), true);
 });
 
 test('focus loss invalidates automatic requests', () => {
@@ -24,8 +24,16 @@ test('focus loss invalidates automatic requests', () => {
 
   state.loseFocus();
 
-  assert.equal(state.isCurrent(request), false);
+  assert.equal(state.isCurrent(request, true), false);
   assert.equal(state.newRequest('editor-a'), null);
+});
+
+test('external focus loss invalidates current request before focus event arrives', () => {
+  const state = new CoordinatorState();
+  state.focusEditor('editor-a');
+  const request = state.newRequest('editor-a');
+
+  assert.equal(state.isCurrent(request, false), false);
 });
 
 test('focusing same editor keeps current request valid', () => {
@@ -35,7 +43,7 @@ test('focusing same editor keeps current request valid', () => {
 
   state.focusEditor('editor-a');
 
-  assert.equal(state.isCurrent(request), true);
+  assert.equal(state.isCurrent(request, true), true);
 });
 
 test('explicit invalidation makes current request stale', () => {
@@ -45,7 +53,7 @@ test('explicit invalidation makes current request stale', () => {
 
   state.invalidateRequests();
 
-  assert.equal(state.isCurrent(request), false);
+  assert.equal(state.isCurrent(request, true), false);
 });
 
 test('focus loss from inactive editor does not invalidate current request', () => {
@@ -55,7 +63,7 @@ test('focus loss from inactive editor does not invalidate current request', () =
 
   state.loseFocus('editor-a');
 
-  assert.equal(state.isCurrent(request), true);
+  assert.equal(state.isCurrent(request, true), true);
 });
 
 test('shutdown rejects new requests', () => {

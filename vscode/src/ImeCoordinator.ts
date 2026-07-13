@@ -147,6 +147,7 @@ export class ImeCoordinator {
     }
 
     this.state.loseFocus();
+    this.clearThrottleTimer();
     this.mailbox.clear(isPendingEditorEvent);
     this.mailbox.post({ kind: 'focus-lost' });
   }
@@ -172,6 +173,7 @@ export class ImeCoordinator {
   setEnabled(enabled: boolean): void {
     this.state.setEnabled(enabled);
     if (!enabled) {
+      this.clearThrottleTimer();
       this.mailbox.clear(isPendingEditorEvent);
       this.mailbox.post({ kind: 'focus-lost' });
     }
@@ -324,10 +326,7 @@ export class ImeCoordinator {
     editor: vscode.TextEditor,
     request: EditorRequest,
   ): boolean {
-    return (
-      this.state.isCurrent(request) &&
-      this.isEditorActive(editor)
-    );
+    return this.state.isCurrent(request, this.isEditorActive(editor));
   }
 
   private isEditorActive(editor: vscode.TextEditor): boolean {
@@ -396,12 +395,16 @@ export class ImeCoordinator {
   }
 
   private clearTimers(): void {
+    this.clearThrottleTimer();
+    this.clearProgrammaticCapsChange();
+  }
+
+  private clearThrottleTimer(): void {
     if (this.throttleRetryTimer) {
       clearTimeout(this.throttleRetryTimer);
       this.throttleRetryTimer = null;
     }
     this.throttledEditor = null;
-    this.clearProgrammaticCapsChange();
   }
 }
 

@@ -65,10 +65,11 @@ class CoordinatorState<T> {
     }
 
     @Synchronized
-    fun isCurrent(request: CoordinatorRequest<T>): Boolean {
+    fun isCurrent(request: CoordinatorRequest<T>, platformFocused: Boolean): Boolean {
         return !shuttingDown &&
                 enabled &&
                 windowFocused &&
+                platformFocused &&
                 activeEditorId == request.editorId &&
                 generation == request.generation
     }

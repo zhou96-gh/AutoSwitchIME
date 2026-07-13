@@ -51,11 +51,15 @@ export class CoordinatorState<T> {
     this.generation += 1;
   }
 
-  isCurrent(request: CoordinatorRequest<T>): boolean {
+  isCurrent(
+    request: CoordinatorRequest<T>,
+    platformFocused: boolean,
+  ): boolean {
     return (
       !this.shuttingDown &&
       this.enabled &&
       this.windowFocused &&
+      platformFocused &&
       this.activeEditorId === request.editorId &&
       this.generation === request.generation
     );

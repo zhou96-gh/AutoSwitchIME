@@ -46,7 +46,7 @@ Coordinator 是唯一自动切换入口：事件邮箱严格串行，新编辑�
 
 IntelliJ 和 VSCode 的 UI/监听器入口不得直接调用 Provider；必须向各自 Coordinator 提交事件。同步方法只允许控制器内部或非 UI 诊断路径使用，避免 `WeaselServer.exe` 等外部调用阻塞界面。
 
-所有会修改系统全局输入法或 CapsLock 的自动切换请求，必须在实际执行前确认触发它的 IDE/VSCode 窗口和编辑器仍处于焦点中；失焦后只允许释放插件自己开启的 CapsLock，不允许继续执行排队中的上下文切换。
+所有会修改系统全局输入法或 CapsLock 的自动切换请求，必须在实际执行前同时确认 Coordinator 请求仍有效，且触发它的 IDE/VSCode 窗口和编辑器实时处于焦点中；不能只依赖先前收到的焦点事件。失焦后只允许释放插件自己开启的 CapsLock，不允许继续执行排队中的上下文切换。
 
 物理 CapsLock 是唯一真相源，无软件镜像状态。
 
