@@ -57,8 +57,8 @@ intellijPlatform {
     pluginConfiguration {
         version.set("${project.version}")
         ideaVersion {
-            sinceBuild.set("261")
-            untilBuild.set("261.*")
+            sinceBuild.set(property("pluginSinceBuild").toString())
+            // Keep the upper bound open so routine IDE upgrades do not disable the plugin.
         }
     }
 }

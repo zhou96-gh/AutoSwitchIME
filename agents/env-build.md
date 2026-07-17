@@ -14,6 +14,8 @@
 | Node.js | 22 | Docker 镜像内置 |
 | VSCE | latest | npm global install |
 
+IntelliJ 插件只设置 `pluginSinceBuild=261` 作为最低兼容版本，不设置 `until-build`。这样 IDE 常规升级不会仅因版本号变化而禁用插件；最终 ZIP 的兼容元数据由 `scripts/check-intellij-plugin.py` 校验。
+
 ## Docker 构建
 
 ### 容器重建与清理边界
@@ -55,6 +57,7 @@ docker compose run --rm dev
 
 # IntelliJ 插件
 ./gradlew clean :intellij:buildPlugin -x buildSearchableOptions -x prepareJarSearchableOptions
+python3 -B scripts/check-intellij-plugin.py
 
 # VSCode 扩展
 cd vscode && npx vsce package --allow-missing-repository

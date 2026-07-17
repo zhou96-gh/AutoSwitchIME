@@ -13,6 +13,7 @@ echo "Rust build done"
 echo "=== 2/3: IntelliJ 插件 ==="
 cd /workspace
 ./gradlew clean :intellij:buildPlugin -x buildSearchableOptions -x prepareJarSearchableOptions 2>&1
+python3 -B scripts/check-intellij-plugin.py
 echo "IntelliJ plugin done"
 
 echo "=== 3/3: VSCode 扩展 ==="
