@@ -10,6 +10,8 @@ import java.util.regex.Pattern
 object RuleEvaluator {
 
     private val patternCache = mutableMapOf<String, Pattern>()
+    private val trailingPunctuationOrSymbols = Pattern.compile("[\\p{P}\\p{S}]+$")
+    private val leadingPunctuationOrSymbols = Pattern.compile("^[\\p{P}\\p{S}]+")
 
     /**
      * 评估 Insert 模式下的输入法动作
@@ -33,18 +35,21 @@ object RuleEvaluator {
         englishBeforeRegex: String = "",
         englishAfterRegex: String = ""
     ): ImeAction {
+        val normalizedBefore = trailingPunctuationOrSymbols.matcher(before).replaceFirst("")
+        val normalizedAfter = leadingPunctuationOrSymbols.matcher(after).replaceFirst("")
+
         // 1. 检查中文规则：前后任一匹配
-        if (matchesRegex(chineseBeforeRegex, before) || matchesRegex(chineseAfterRegex, after)) {
+        if (matchesRegex(chineseBeforeRegex, normalizedBefore) || matchesRegex(chineseAfterRegex, normalizedAfter)) {
             return ImeAction.CHINESE
         }
 
         // 2. 检查大写规则：前后任一匹配
-        if (matchesRegex(capsBeforeRegex, before) || matchesRegex(capsAfterRegex, after)) {
+        if (matchesRegex(capsBeforeRegex, normalizedBefore) || matchesRegex(capsAfterRegex, normalizedAfter)) {
             return ImeAction.CAPS
         }
 
         // 3. 检查英文规则：前后任一匹配
-        if (matchesRegex(englishBeforeRegex, before) || matchesRegex(englishAfterRegex, after)) {
+        if (matchesRegex(englishBeforeRegex, normalizedBefore) || matchesRegex(englishAfterRegex, normalizedAfter)) {
             return ImeAction.ENGLISH
         }
 

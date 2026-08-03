@@ -16,6 +16,8 @@ export interface RuleSet {
 
 /** 正则 Pattern 缓存 */
 const patternCache = new Map<string, RegExp>();
+const trailingPunctuationOrSymbols = /[\p{P}\p{S}]+$/u;
+const leadingPunctuationOrSymbols = /^[\p{P}\p{S}]+/u;
 
 /**
  * 评估 Insert 模式下的输入法动作
@@ -25,18 +27,21 @@ export function evaluateRules(
   after: string,
   rules: RuleSet,
 ): ImeAction {
+  const normalizedBefore = before.replace(trailingPunctuationOrSymbols, '');
+  const normalizedAfter = after.replace(leadingPunctuationOrSymbols, '');
+
   // 1. 检查中文规则：前后任一匹配
   if (
-    matchesRegex(rules.chineseBeforeRegex, before) ||
-    matchesRegex(rules.chineseAfterRegex, after)
+    matchesRegex(rules.chineseBeforeRegex, normalizedBefore) ||
+    matchesRegex(rules.chineseAfterRegex, normalizedAfter)
   ) {
     return ImeAction.CHINESE;
   }
 
   // 2. 检查大写规则：前后任一匹配
   if (
-    matchesRegex(rules.capsBeforeRegex, before) ||
-    matchesRegex(rules.capsAfterRegex, after)
+    matchesRegex(rules.capsBeforeRegex, normalizedBefore) ||
+    matchesRegex(rules.capsAfterRegex, normalizedAfter)
   ) {
     return ImeAction.CAPS;
   }
