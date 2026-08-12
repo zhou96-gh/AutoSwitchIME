@@ -78,3 +78,33 @@ ime-sys/target/x86_64-pc-windows-gnu/release/
 - 多模块架构下必须指定 `:intellij:buildPlugin`
 - JNA 依赖为 `compileOnly`（IDE 自带，打包会冲突）
 - Rust 交叉编译使用 mingw-w64 linker，产物为 Windows `.dll`
+
+## GitHub 发布
+
+发布必须从最新 `master` 创建临时发布分支，完成版本、文档和打包流程修改后通过 PR 合入受保护的 `master`；不得直接推送 `master`。发布结束后删除本地和远端临时分支，日常只保留 `master`。
+
+### 发布产物
+
+每个正式 Release 必须同时上传以下三个附件，文件名中的版本必须与插件元数据一致：
+
+- `packages/AutoSwitchIME-IntelliJ-<version>.zip`
+- `packages/AutoSwitchIME-VSCode-<version>.vsix`
+- `packages/RimeVimIME-Lua-<version>.zip`
+
+Lua ZIP 必须至少包含 `rimevim_bridge.lua`、适用的 `*.custom.yaml` 示例和安装说明。Lua 桥是运行时必需组件，不得只依赖 GitHub 自动生成的 Source code 压缩包提供。
+
+### 发布顺序
+
+1. 根据改动类型升级版本，并同步全部版本源和 `CHANGELOG.md`。
+2. 清理 `packages/` 中本次版本的同名残留，运行 `scripts/build-all.sh` 生成三个附件；重新发布时保留上一版本产物直至新 Release 验证成功。
+3. 运行版本一致性、IntelliJ 插件、VSCode 扩展和 Lua ZIP 内容检查，并记录三个附件的 SHA-256。
+4. 提交发布分支、推送远端并创建 PR；验证 PR 内容后合入 `master`。
+5. 确认远端 `master` 指向发布提交，再创建带注释的 `v<version>` 标签并推送该标签。
+6. 创建非草稿、非预发布的 GitHub Release，上传三个附件，并在正文中写明主要变更、安装入口和 SHA-256。
+7. 回读 Release，确认标签目标、附件名称、附件大小和下载地址均正确后，才算发布成功。
+
+### 重新发布与清理
+
+- 已公开版本发现产物遗漏或打包错误时必须升级 patch 版本重新发布，不覆盖或复用原标签。
+- 只有新 Release 完整发布并回读验证成功后，才可删除用户明确指定的旧 Release、对应远端和本地标签以及 `packages/` 中的旧版本产物。
+- 删除前必须再次核对旧版本号和目标 Release；不得清理未明确指定的历史版本。

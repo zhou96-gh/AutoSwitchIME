@@ -2,7 +2,7 @@
 
 IntelliJ/VSCode 插件：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。
 
-**当前版本**: v2.2.26
+**当前版本**: v2.2.27
 
 ## 开发环境
 
@@ -21,7 +21,7 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| 环境构建 | [`agents/env-build.md`](agents/env-build.md) | 工具链版本、Docker 构建 |
+| 环境构建 | [`agents/env-build.md`](agents/env-build.md) | 工具链版本、Docker 构建、GitHub 发布 |
 | IdeaVim 集成 | [`agents/ideavim-integration.md`](agents/ideavim-integration.md) | VimExtension、plugin.xml |
 | 输入法控制 | [`agents/ime-control.md`](agents/ime-control.md) | ImeProvider、Rime、WeaselServer |
 | UI/光标 | [`agents/ui-caret.md`](agents/ui-caret.md) | 光标颜色管理（IntelliJ+VSCode） |
@@ -48,4 +48,4 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 - 每次打包前必须先根据本次改动判断并更新版本号，不能复用旧版本号打包。
 - 语义版本判断：修复或行为修正用 patch，新增向后兼容功能用 minor，破坏性变更用 major。
 - 版本源必须同步更新：本文件当前版本、`gradle.properties` 的 `pluginVersion`、`vscode/package.json` 的 `version`、`vscode/package-lock.json` 顶部包版本。
-- 打包后必须验证产物文件名和插件元数据版本一致，至少检查 `packages/AutoSwitchIME-IntelliJ-<version>.zip` 与 `packages/AutoSwitchIME-VSCode-<version>.vsix`。
+- 打包后必须验证产物文件名和插件元数据版本一致，检查 `packages/AutoSwitchIME-IntelliJ-<version>.zip`、`packages/AutoSwitchIME-VSCode-<version>.vsix` 与 `packages/RimeVimIME-Lua-<version>.zip`；完整发布流程见 `agents/env-build.md`。
