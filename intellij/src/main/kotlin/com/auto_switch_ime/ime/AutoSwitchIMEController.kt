@@ -33,6 +33,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.awt.KeyboardFocusManager
+import java.awt.event.KeyEvent
+import javax.swing.Timer
 
 @Service(Service.Level.APP)
 class AutoSwitchIMEController : Disposable {
@@ -45,7 +48,21 @@ class AutoSwitchIMEController : Disposable {
     private val mailboxLock = Any()
     private val events = ArrayDeque<CoordinatorEvent>()
     private val normalLikeDefaultsApplied = Collections.synchronizedMap(WeakHashMap<Editor, Boolean>())
+    private val strictNormalEditors = Collections.synchronizedMap(WeakHashMap<Editor, Boolean>())
     private var drainScheduled = false
+    private val normalKeyCheckTimer = Timer(100) { enforceNormalEnglishAfterKey() }.apply {
+        isRepeats = false
+    }
+    private val keyEventDispatcher = java.awt.KeyEventDispatcher { event ->
+        if (event.id == KeyEvent.KEY_RELEASED && AutoSwitchIMESettings.instance.enabled) {
+            normalKeyCheckTimer.restart()
+        }
+        false
+    }
+
+    init {
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keyEventDispatcher)
+    }
 
     private val providerDelegate = lazy {
         val config = ImeConfig(type = ImeType.RIME)
@@ -92,6 +109,7 @@ class AutoSwitchIMEController : Disposable {
             coordinatorState.focusEditor(editor)
             val normalLike = normalLikeOverride ?: VimModeChecker.isNormalLikeMode(editor)
             val strictNormal = strictNormalOverride ?: VimModeChecker.isStrictNormalMode(editor)
+            strictNormalEditors[editor] = strictNormal
             val decision = if (normalLike) null else InsertModeDecision.evaluate(editor, settings)
             if (!normalLike) normalLikeDefaultsApplied.remove(editor)
             val action = NormalModePolicy.resolveAction(
@@ -130,6 +148,7 @@ class AutoSwitchIMEController : Disposable {
     fun onEditorFocusLost(editor: Editor) {
         if (disposed.get()) return
         normalLikeDefaultsApplied.remove(editor)
+        strictNormalEditors.remove(editor)
         if (!coordinatorState.loseFocus(editor)) return
         postEvent(CoordinatorEvent.FocusLost(editor), discardPendingContexts = true)
     }
@@ -141,6 +160,24 @@ class AutoSwitchIMEController : Disposable {
     private fun onPhysicalStateChanged(state: ImeState) {
         if (disposed.get()) return
         postEvent(CoordinatorEvent.PhysicalStateChanged(state))
+    }
+
+    private fun enforceNormalEnglishAfterKey() {
+        if (disposed.get()) return
+        val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull {
+            !it.isDisposed && it.contentComponent.hasFocus()
+        } ?: return
+        if (strictNormalEditors[focusedEditor] != true) return
+
+        provider.stateWatcher.refresh()
+        if (!provider.getTrackedState().isAsciiMode) {
+            requestEditorUpdate(
+                editor = focusedEditor,
+                source = "NormalKeyReleased",
+                normalLikeOverride = true,
+                strictNormalOverride = true
+            )
+        }
     }
 
     private fun postEvent(event: CoordinatorEvent, discardPendingContexts: Boolean = false) {
@@ -265,7 +302,7 @@ class AutoSwitchIMEController : Disposable {
             if (VimModeChecker.isNormalLikeMode(focusedEditor)) {
                 CaretColorManager.restoreCaretColor(focusedEditor)
                 if (NormalModePolicy.shouldEnforceEnglish(
-                        VimModeChecker.isStrictNormalMode(focusedEditor),
+                        strictNormalEditors[focusedEditor] == true,
                         state.isAsciiMode
                     )) {
                     requestEditorUpdate(focusedEditor, "PhysicalStateChanged")
@@ -286,6 +323,8 @@ class AutoSwitchIMEController : Disposable {
     override fun dispose() {
         if (!disposed.compareAndSet(false, true)) return
 
+        normalKeyCheckTimer.stop()
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyEventDispatcher)
         coordinatorState.shutdown()
         postEvent(CoordinatorEvent.Shutdown, discardPendingContexts = true)
         switchExecutor.shutdown()
