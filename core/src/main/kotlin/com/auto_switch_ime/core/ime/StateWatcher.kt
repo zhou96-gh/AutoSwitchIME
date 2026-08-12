@@ -98,7 +98,11 @@ class StateWatcher(
                 logger.debug("Watching directory: $parentDir for $fileName changes")
 
                 while (isRunning && !Thread.currentThread().isInterrupted) {
-                    val watchKey = service.poll(500, TimeUnit.MILLISECONDS) ?: continue
+                    val watchKey = service.poll(500, TimeUnit.MILLISECONDS)
+                    if (watchKey == null) {
+                        readAndApplyState()
+                        continue
+                    }
 
                     for (event in watchKey.pollEvents()) {
                         val context = event.context()?.toString() ?: continue
@@ -140,6 +144,10 @@ class StateWatcher(
                 break
             }
         }
+    }
+
+    fun refresh() {
+        readAndApplyState()
     }
 
     private fun readAndApplyState() {

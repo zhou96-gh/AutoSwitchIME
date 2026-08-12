@@ -39,7 +39,7 @@ async updateCaretColor(action: ImeAction): Promise<void>
 ### 实现
 通过 `vscode.workspace.getConfiguration().update('workbench.colorCustomizations.editorCursor.foreground', color)` 修改光标颜色。
 dispose 时恢复原始颜色。
-进入 Normal/Visual 等 normal-like 模式时同样恢复原始颜色；输入法仅在进入或重新聚焦时默认切换到英文，之后允许用户手动切换。
+进入 Normal/Visual 等 normal-like 模式时同样恢复原始颜色；Normal 模式始终保持英文，Visual、Command 等其他 normal-like 模式仅在进入或重新聚焦时默认英文，之后允许用户手动切换。
 
 ### `isCapsLock` 直接来自即时物理读（`nativeCapsRead()`），
 无软件镜像状态，`getTrackedState().isCapsLock === actual physical value`。

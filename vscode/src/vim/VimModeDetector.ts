@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { VimMode } from '../core/types';
+export { isNormalLikeMode, isStrictNormalMode } from '../core/NormalModePolicy';
 
 /** VSCodeVim 对外暴露的模式字符串 */
 type VimModeString =
@@ -49,17 +50,6 @@ export function isVisualMode(mode: VimMode): boolean {
     mode === VimMode.VISUAL_LINE ||
     mode === VimMode.VISUAL_BLOCK
   );
-}
-
-/**
- * 判断当前是否处于需要按 Normal 处理的 Vim 模式
- * 只有无选区的 Insert/UNKNOWN 按规则切换，其他已知 Vim 模式使用 normal-like 默认行为
- */
-export function isNormalLikeMode(mode: VimMode, hasSelection = false): boolean {
-  if (hasSelection) {
-    return true;
-  }
-  return mode !== VimMode.INSERT && mode !== VimMode.UNKNOWN;
 }
 
 /**

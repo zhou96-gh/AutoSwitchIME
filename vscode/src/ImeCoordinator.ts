@@ -3,12 +3,18 @@ import { CoordinatorRequest, CoordinatorState } from './core/CoordinatorState';
 import { EventMailbox } from './core/EventMailbox';
 import { nativeForegroundWindow } from './core/native';
 import { evaluateRules } from './core/RuleEvaluator';
+import {
+  isNormalLikeMode,
+  isStrictNormalMode,
+  resolveNormalModeAction,
+  shouldEnforceNormalEnglish,
+} from './core/NormalModePolicy';
 import { ImeAction, ImeState, Logger, VimMode } from './core/types';
 import { RimeImeProvider } from './providers/RimeImeProvider';
 import { PluginSettings } from './settings';
 import { CaretColorManager } from './ui/CaretColor';
 import { ImeStatusBar } from './ui/StatusBar';
-import { isNormalLikeMode, VimModeDetector } from './vim/VimModeDetector';
+import { VimModeDetector } from './vim/VimModeDetector';
 
 type EditorRequest = CoordinatorRequest<vscode.TextEditor>;
 
@@ -90,14 +96,17 @@ export class ImeCoordinator {
 
     this.state.focusEditor(editor);
     const vimMode = this.modeDetector.currentMode;
-    const normalLike = isNormalLikeMode(vimMode, hasSelection(editor));
+    const editorHasSelection = hasSelection(editor);
+    const normalLike = isNormalLikeMode(vimMode, editorHasSelection);
+    const strictNormal = isStrictNormalMode(vimMode, editorHasSelection);
     const { before, after } = getLineContextText(editor, this.logger);
     if (!normalLike) this.normalLikeDefaultsApplied.delete(editor);
-    const action = !normalLike
-      ? evaluateRules(before, after, settings.rules)
-      : this.normalLikeDefaultsApplied.get(editor)
-        ? ImeAction.UNCHANGED
-        : ImeAction.ENGLISH;
+    const action =
+      resolveNormalModeAction(
+        vimMode,
+        editorHasSelection,
+        this.normalLikeDefaultsApplied.get(editor) === true,
+      ) ?? evaluateRules(before, after, settings.rules);
 
     if (this.shouldSkipAction(editor, action) && !normalLike) {
       this.logger.debug(`Duplicated ${action} action skipped`);
@@ -307,6 +316,13 @@ export class ImeCoordinator {
     if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
       this.updateStatus(actionFromState(state), state);
       await this.caretColor.restoreCaretColor();
+      if (shouldEnforceNormalEnglish(
+        this.modeDetector.currentMode,
+        hasSelection(editor),
+        state.isAsciiMode,
+      )) {
+        this.requestEditorUpdate(editor);
+      }
       return;
     }
     this.applyColorAndStatus(actionFromState(state), state);

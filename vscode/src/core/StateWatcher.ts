@@ -84,8 +84,9 @@ export class StateWatcher {
     // 确保状态文件存在
     this.ensureStateFile();
 
-    // 尝试使用 fs.watch，回退到轮询
+    // fs.watch 用于即时通知，轮询用于兜底 Windows 上可能丢失的文件事件。
     this.startFileWatch();
+    this.startPolling();
 
     // 初始化：读取当前状态
     this.readAndApplyState();
@@ -128,14 +129,12 @@ export class StateWatcher {
         }
       });
       this.watcher.on('error', (err: Error) => {
-        this.logger.warn('fs.watch error, falling back to polling', err);
+        this.logger.warn('fs.watch error, continuing with polling', err);
         this.watcher?.close();
         this.watcher = null;
-        this.startPolling();
       });
     } catch (e) {
       this.logger.warn('fs.watch not available, using polling', e as Error);
-      this.startPolling();
     }
   }
 
@@ -143,18 +142,10 @@ export class StateWatcher {
    * 轮询回退方案（500ms 间隔）
    */
   private startPolling(): void {
-    let lastMtime = 0;
+    if (this.pollTimer) return;
     this.pollTimer = setInterval(() => {
       if (!this.isRunning) return;
-      try {
-        const stat = fs.statSync(this.stateFilePath);
-        if (stat.mtimeMs !== lastMtime) {
-          lastMtime = stat.mtimeMs;
-          this.readAndApplyState();
-        }
-      } catch {
-        // 文件可能被删除，忽略
-      }
+      this.readAndApplyState();
     }, 500);
   }
 

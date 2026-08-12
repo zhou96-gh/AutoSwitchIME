@@ -60,4 +60,20 @@ object VimModeChecker {
     fun isNormalLikeMode(mode: Mode, hasSelection: Boolean = false): Boolean {
         return hasSelection || mode !is Mode.INSERT
     }
+
+    fun isStrictNormalMode(editor: Editor): Boolean {
+        return try {
+            if (!isIdeaVimEnabled()) return false
+
+            val mode = com.maddyhome.idea.vim.api.injector.vimState.mode
+            isStrictNormalMode(mode, editor.selectionModel.hasSelection())
+        } catch (e: Exception) {
+            AutoSwitchIMELogger.debug("Failed to check strict Normal mode for editor: ${e.message}")
+            false
+        }
+    }
+
+    fun isStrictNormalMode(mode: Mode, hasSelection: Boolean = false): Boolean {
+        return !hasSelection && mode is Mode.NORMAL && !mode.isInsertPending && !mode.isReplacePending
+    }
 }

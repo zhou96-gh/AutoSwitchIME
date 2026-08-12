@@ -6,7 +6,7 @@
     <description><![CDATA[
     根据 Vim 模式自动切换输入法中英文状态（Rime/Weasel）。
     <ul>
-      <li>Normal 等模式进入时默认英文，之后允许手动切换</li>
+      <li>Normal 模式始终保持英文，其他 normal-like 模式进入时默认英文</li>
       <li>Insert 模式根据光标上下文自动选择中文、大写或英文</li>
       <li>光标颜色指示 IME 状态</li>
     </ul>

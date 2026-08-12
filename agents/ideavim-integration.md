@@ -32,7 +32,7 @@ override fun modeChanged(editor: VimEditor, oldMode: Mode) {
 }
 ```
 
-注意：只要当前编辑器存在活动选区，即使 IdeaVim 仍报告 `Mode.INSERT`，也必须按选中/Visual 模式处理。进入 Normal/Visual 等 normal-like 模式时默认切换到英文，之后允许用户手动切换，并恢复 IDE 原生光标颜色。
+注意：只要当前编辑器存在活动选区，即使 IdeaVim 仍报告 `Mode.INSERT`，也必须按选中/Visual 模式处理。非 Insert/Replace 临时 `<C-O>` 的精确 `Mode.NORMAL` 且无活动选区时始终保持英文；任意按键释放后延迟回读 Rime 状态，检测到中文必须重新提交英文动作，但不得绑定具体输入法快捷键。Visual、Command 等其他 normal-like 模式只在进入或重新聚焦时默认英文，之后允许用户手动切换。所有 normal-like 模式都恢复 IDE 原生光标颜色。
 监听器只提交编辑器上下文事件，不直接调用 Provider 或更新目标光标颜色；动作决策和系统切换由 `AutoSwitchIMEController` 串行处理。
 
 ## 核心文件
