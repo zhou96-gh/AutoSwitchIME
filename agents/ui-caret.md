@@ -25,6 +25,7 @@ object CaretColorManager {
 - 编辑器/窗口失焦时释放插件自己开启的 CapsLock 后
 - 编辑器创建时初始化
 - `ImeStateDetector.getCurrentState()` 检测到手动 IME 切换时更新
+- IntelliJ 编辑器聚焦期间任意按键释放后必须主动读取物理 CapsLock 并刷新颜色；该刷新不得受 Vim 模式限制。
 - **光标颜色必须跟随输入法规则产生的目标状态**：先按 Vim 模式/正则规则决定并执行输入法动作，再用同一个目标状态更新颜色；不能为了修颜色伪造独立的 IME 状态。
 - 选色前必须用物理 CapsLock 读数覆盖传入状态，不能信任状态文件中的 `caps_lock`。
 - 插件启用期间，光标颜色只读取当前实际英文、中文或 CapsLock 状态，不得读取或判断 Vim 模式；IdeaVim 只管理光标形状、粗细和厚度。
