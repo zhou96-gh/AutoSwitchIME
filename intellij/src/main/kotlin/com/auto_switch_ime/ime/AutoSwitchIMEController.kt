@@ -50,12 +50,12 @@ class AutoSwitchIMEController : Disposable {
     private val normalLikeDefaultsApplied = Collections.synchronizedMap(WeakHashMap<Editor, Boolean>())
     private val strictNormalEditors = Collections.synchronizedMap(WeakHashMap<Editor, Boolean>())
     private var drainScheduled = false
-    private val normalKeyCheckTimer = Timer(100) { enforceNormalEnglishAfterKey() }.apply {
+    private val physicalStateCheckTimer = Timer(100) { refreshPhysicalStateAfterKey() }.apply {
         isRepeats = false
     }
     private val keyEventDispatcher = java.awt.KeyEventDispatcher { event ->
         if (event.id == KeyEvent.KEY_RELEASED && AutoSwitchIMESettings.instance.enabled) {
-            normalKeyCheckTimer.restart()
+            physicalStateCheckTimer.restart()
         }
         false
     }
@@ -163,23 +163,14 @@ class AutoSwitchIMEController : Disposable {
         postEvent(CoordinatorEvent.PhysicalStateChanged(state))
     }
 
-    private fun enforceNormalEnglishAfterKey() {
+    private fun refreshPhysicalStateAfterKey() {
         if (disposed.get()) return
         val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull {
             !it.isDisposed && it.contentComponent.hasFocus()
         } ?: return
-        if (strictNormalEditors[focusedEditor] != true) return
 
         provider.stateWatcher.refresh()
-        val state = provider.getTrackedState()
-        if (!state.isAsciiMode || state.isCapsLock) {
-            requestEditorUpdate(
-                editor = focusedEditor,
-                source = "NormalKeyReleased",
-                normalLikeOverride = true,
-                strictNormalOverride = true
-            )
-        }
+        onPhysicalStateChanged(provider.getTrackedState())
     }
 
     private fun postEvent(event: CoordinatorEvent, discardPendingContexts: Boolean = false) {
@@ -188,6 +179,9 @@ class AutoSwitchIMEController : Disposable {
         synchronized(mailboxLock) {
             if (discardPendingContexts || event is CoordinatorEvent.EditorContext) {
                 events.removeIf { it is CoordinatorEvent.EditorContext }
+            }
+            if (event is CoordinatorEvent.PhysicalStateChanged) {
+                events.removeIf { it is CoordinatorEvent.PhysicalStateChanged }
             }
             events.addLast(event)
             if (drainScheduled) return
@@ -305,7 +299,7 @@ class AutoSwitchIMEController : Disposable {
     override fun dispose() {
         if (!disposed.compareAndSet(false, true)) return
 
-        normalKeyCheckTimer.stop()
+        physicalStateCheckTimer.stop()
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyEventDispatcher)
         coordinatorState.shutdown()
         postEvent(CoordinatorEvent.Shutdown, discardPendingContexts = true)
