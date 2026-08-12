@@ -6,6 +6,7 @@ import com.auto_switch_ime.core.ImeAction
 import com.auto_switch_ime.core.ImeConfig
 import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.ImeType
+import com.auto_switch_ime.core.NormalModePolicy
 import com.auto_switch_ime.core.coordinator.CoordinatorRequest
 import com.auto_switch_ime.core.coordinator.CoordinatorState
 import com.auto_switch_ime.core.ime.ImeStateDetector
@@ -76,7 +77,8 @@ class AutoSwitchIMEController : Disposable {
     fun requestEditorUpdate(
         editor: Editor,
         source: String,
-        normalLikeOverride: Boolean? = null
+        normalLikeOverride: Boolean? = null,
+        strictNormalOverride: Boolean? = null
     ) {
         if (disposed.get()) return
 
@@ -89,13 +91,14 @@ class AutoSwitchIMEController : Disposable {
 
             coordinatorState.focusEditor(editor)
             val normalLike = normalLikeOverride ?: VimModeChecker.isNormalLikeMode(editor)
+            val strictNormal = strictNormalOverride ?: VimModeChecker.isStrictNormalMode(editor)
             val decision = if (normalLike) null else InsertModeDecision.evaluate(editor, settings)
             if (!normalLike) normalLikeDefaultsApplied.remove(editor)
-            val action = when {
-                !normalLike -> decision!!.action
-                normalLikeDefaultsApplied[editor] == true -> ImeAction.UNCHANGED
-                else -> ImeAction.ENGLISH
-            }
+            val action = NormalModePolicy.resolveAction(
+                normalLike,
+                strictNormal,
+                normalLikeDefaultsApplied[editor] == true
+            ) ?: decision!!.action
             val duplicated = ActionDeduplicator.shouldSkip(editor, action)
 
             if (duplicated && !normalLike) {
@@ -261,6 +264,12 @@ class AutoSwitchIMEController : Disposable {
             } ?: return@invokeLater
             if (VimModeChecker.isNormalLikeMode(focusedEditor)) {
                 CaretColorManager.restoreCaretColor(focusedEditor)
+                if (NormalModePolicy.shouldEnforceEnglish(
+                        VimModeChecker.isStrictNormalMode(focusedEditor),
+                        state.isAsciiMode
+                    )) {
+                    requestEditorUpdate(focusedEditor, "PhysicalStateChanged")
+                }
                 return@invokeLater
             }
 
