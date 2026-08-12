@@ -25,6 +25,7 @@ export function shouldEnforceNormalEnglish(
   mode: VimMode,
   hasSelection: boolean,
   asciiMode: boolean,
+  capsLock: boolean,
 ): boolean {
-  return isStrictNormalMode(mode, hasSelection) && !asciiMode;
+  return isStrictNormalMode(mode, hasSelection) && (!asciiMode || capsLock);
 }

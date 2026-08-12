@@ -44,33 +44,39 @@ class RimeImeProvider(
     }
 
     override suspend fun setAsciiMode(ascii: Boolean) {
-        setAsciiMode(ascii) { true }
+        setAsciiMode(ascii, { true })
     }
 
-    suspend fun setAsciiMode(ascii: Boolean, shouldContinue: () -> Boolean) {
+    suspend fun setAsciiMode(
+        ascii: Boolean,
+        shouldContinue: () -> Boolean,
+        forceLowercase: Boolean = false
+    ) {
         synchronized(switchLock) {
             if (!shouldContinue()) return
             stateWatcher.isForcingImeSwitch = true
             try {
                 val capsOn = NativeImeSys.imeCapsRead()
 
-                if (currentAsciiMode == ascii && !capsOn) return
-
-                if (capsOn && ownsCapsLock) {
+                if (capsOn && (ownsCapsLock || forceLowercase)) {
                     if (!shouldContinue()) return
                     logger.debug("Exiting caps mode before switching IME mode")
                     NativeImeSys.imeCapsSet(false)
                     ownsCapsLock = false
                 }
 
-                if (currentAsciiMode == ascii) return
-                if (!shouldContinue()) return
+                if (currentAsciiMode != ascii) {
+                    if (!shouldContinue()) return
+                    currentAsciiMode = ascii
+                    switchImeMode(
+                        if (ascii) "/ascii" else "/nascii",
+                        if (ascii) "ASCII" else "Chinese",
+                        shouldContinue
+                    )
+                }
 
-                currentAsciiMode = ascii
-                switchImeMode(
-                    if (ascii) "/ascii" else "/nascii",
-                    if (ascii) "ASCII" else "Chinese",
-                    shouldContinue
+                onStateChanged?.invoke(
+                    ImeState(currentAsciiMode, NativeImeSys.imeCapsRead(), stateWatcher.isComposing)
                 )
             } finally {
                 stateWatcher.isForcingImeSwitch = false

@@ -27,7 +27,7 @@ object CaretColorManager {
 - `ImeStateDetector.getCurrentState()` 检测到手动 IME 切换时更新
 - **光标颜色必须跟随输入法规则产生的目标状态**：先按 Vim 模式/正则规则决定并执行输入法动作，再用同一个目标状态更新颜色；不能为了修颜色伪造独立的 IME 状态。
 - 选色前必须用物理 CapsLock 读数覆盖传入状态，不能信任状态文件中的 `caps_lock`。
-- 插件启用期间，Normal/Visual 等 normal-like 模式也必须按当前实际英文、中文或 CapsLock 状态着色；只保留 IdeaVim 管理的光标形状、粗细和厚度。
+- 插件启用期间，光标颜色只读取当前实际英文、中文或 CapsLock 状态，不得读取或判断 Vim 模式；IdeaVim 只管理光标形状、粗细和厚度。
 
 ## VSCode — CaretColor.ts
 
@@ -39,7 +39,7 @@ async updateCaretColor(action: ImeAction): Promise<void>
 ### 实现
 通过 `vscode.workspace.getConfiguration().update('workbench.colorCustomizations.editorCursor.foreground', color)` 修改光标颜色。
 dispose 时恢复原始颜色。
-进入 Normal/Visual 等 normal-like 模式时继续按当前实际输入状态着色；Normal 模式始终保持英文，Visual、Command 等其他 normal-like 模式仅在进入或重新聚焦时默认英文，之后允许用户手动切换。
+光标颜色刷新只读取当前实际输入状态，不得读取或判断 Vim 模式；Normal、Visual、Insert、Command 等模式只影响输入法切换策略。
 
 ### `isCapsLock` 直接来自即时物理读（`nativeCapsRead()`），
 无软件镜像状态，`getTrackedState().isCapsLock === actual physical value`。
