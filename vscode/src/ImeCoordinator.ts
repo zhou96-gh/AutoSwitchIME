@@ -39,6 +39,7 @@ export class ImeCoordinator {
   private readonly state = new CoordinatorState<vscode.TextEditor>();
   private readonly mailbox: EventMailbox<CoordinatorEvent>;
   private lastCapsState: boolean;
+  private readonly normalLikeDefaultsApplied = new WeakMap<vscode.TextEditor, boolean>();
   private lastActionKey: string | null = null;
   private lastUpdateTime = 0;
   private throttleRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -91,9 +92,12 @@ export class ImeCoordinator {
     const vimMode = this.modeDetector.currentMode;
     const normalLike = isNormalLikeMode(vimMode, hasSelection(editor));
     const { before, after } = getLineContextText(editor, this.logger);
-    const action = normalLike
-      ? ImeAction.UNCHANGED
-      : evaluateRules(before, after, settings.rules);
+    if (!normalLike) this.normalLikeDefaultsApplied.delete(editor);
+    const action = !normalLike
+      ? evaluateRules(before, after, settings.rules)
+      : this.normalLikeDefaultsApplied.get(editor)
+        ? ImeAction.UNCHANGED
+        : ImeAction.ENGLISH;
 
     if (this.shouldSkipAction(editor, action) && !normalLike) {
       this.logger.debug(`Duplicated ${action} action skipped`);
@@ -122,6 +126,7 @@ export class ImeCoordinator {
   initializeEditor(editor: vscode.TextEditor): void {
     if (!this.isEditorActive(editor)) return;
 
+    this.normalLikeDefaultsApplied.delete(editor);
     this.state.focusEditor(editor);
     const normalLike = isNormalLikeMode(
       this.modeDetector.currentMode,
@@ -149,10 +154,18 @@ export class ImeCoordinator {
     if (focused) {
       this.focusedWindow = nativeForegroundWindow();
       const editor = vscode.window.activeTextEditor;
-      if (editor) this.state.focusEditor(editor);
+      if (editor) {
+        this.state.focusEditor(editor);
+        if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
+          this.normalLikeDefaultsApplied.delete(editor);
+          this.requestEditorUpdate(editor);
+        }
+      }
       return;
     }
 
+    const editor = vscode.window.activeTextEditor;
+    if (editor) this.normalLikeDefaultsApplied.delete(editor);
     this.focusedWindow = 0n;
     this.state.loseFocus();
     this.clearThrottleTimer();
@@ -211,7 +224,7 @@ export class ImeCoordinator {
         }
         break;
       case 'physical-state':
-        this.handlePhysicalState(event.state);
+        await this.handlePhysicalState(event.state);
         break;
       case 'caps-changed':
         await this.handleCapsChanged(event.capsLock);
@@ -241,8 +254,10 @@ export class ImeCoordinator {
       }
     }
 
-    if (event.normalLike) {
-      this.logger.debug(`Normal-like Vim mode: ${event.vimMode}, preserving IME state`);
+    if (event.normalLike && event.action === ImeAction.UNCHANGED) {
+      this.logger.debug(`Normal-like Vim mode: ${event.vimMode}, preserving user-selected IME state`);
+      const state = this.provider.getTrackedState();
+      this.updateStatus(actionFromState(state), state);
       await this.caretColor.restoreCaretColor();
       return;
     } else {
@@ -271,17 +286,29 @@ export class ImeCoordinator {
     }
 
     if (!isCurrent()) return;
+    if (event.normalLike) {
+      this.normalLikeDefaultsApplied.set(event.editor, true);
+      const state = this.provider.getTrackedState();
+      this.updateStatus(actionFromState(state), state);
+      await this.caretColor.restoreCaretColor();
+      return;
+    }
+
     const state = stateFromAction(event.action);
     this.applyColorAndStatus(event.action, state, event.normalLike);
   }
 
-  private handlePhysicalState(state: ImeState): void {
+  private async handlePhysicalState(state: ImeState): Promise<void> {
     this.lastActionKey = null;
     if (!this.getSettings().enabled || !vscode.window.state.focused) return;
 
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
-    if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) return;
+    if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
+      this.updateStatus(actionFromState(state), state);
+      await this.caretColor.restoreCaretColor();
+      return;
+    }
     this.applyColorAndStatus(actionFromState(state), state);
   }
 
@@ -373,6 +400,12 @@ export class ImeCoordinator {
     const actualCapsLock = this.provider.getTrackedState().isCapsLock;
     const effectiveAction = actualCapsLock ? ImeAction.CAPS : action;
     this.caretColor.updateCaretColor(effectiveAction, forceColor);
+    this.updateStatus(effectiveAction, state);
+  }
+
+  private updateStatus(action: ImeAction, state?: ImeState): void {
+    const actualCapsLock = this.provider.getTrackedState().isCapsLock;
+    const effectiveAction = actualCapsLock ? ImeAction.CAPS : action;
     if (state) {
       this.getStatusBar()?.updateImeState(
         { ...state, isCapsLock: actualCapsLock },

@@ -22,11 +22,14 @@
 | insertModeCapsAfterRegex | String | `""` | 大写规则（光标后，默认不启用） |
 | logError/Warn/Info/Debug | Boolean | false | 日志级别控制 |
 
+设置页提供“恢复默认设置”按钮。按钮只把当前表单恢复为代码默认值，必须点击“应用”才会持久化；点击“取消”应恢复操作前已保存的配置。
+
 ## VSCode 设置
 
 - 通过 `contributes.configuration` 注册，路径: `Settings → Extensions → Auto Switch IME`
 - 配置项与 IntelliJ 对齐，前缀 `autoSwitchIME.*`
 - 正则规则字段名: `chineseBeforeRegex` / `chineseAfterRegex` / `capsBeforeRegex` / `capsAfterRegex`
+- 命令面板提供 `Auto Switch IME: 恢复默认设置`，清除本插件配置在用户、工作区和工作区文件夹层级的覆盖值，使其回落到 `package.json` 默认值；不修改其他扩展或编辑器配置。恢复后提示用户重新加载窗口。
 
 ## 正则规则
 

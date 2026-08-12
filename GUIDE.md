@@ -101,13 +101,4 @@ ime-watch.exe
 ./scripts/ime-bridge-install.sh -h
 ```
 
-### Windows PowerShell
-
-```powershell
-.\scripts\ime-bridge-install.ps1
-.\scripts\ime-bridge-install.ps1 -Schema rime_ice
-.\scripts\ime-bridge-install.ps1 -Watch
-.\scripts\ime-bridge-install.ps1 -Uninstall
-```
-
 状态文件写入 `%TEMP%\ime-state-rime.json`（write-tmp-rename 原子写入）。

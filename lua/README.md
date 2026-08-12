@@ -34,7 +34,7 @@ patch:
 
 ## 验证安装
 
-部署后，在编辑器中按 Shift 切换输入法，检查 `%TEMP%\rimevim-state.json` 文件是否生成并包含正确的状态：
+部署后，在编辑器中切换一次中英文，检查 `%TEMP%\ime-state-rime.json` 文件是否生成并包含正确的状态：
 
 ```json
 {"ascii_mode": true, "caps_lock": false, "timestamp": 1716364800}
@@ -64,11 +64,11 @@ patch:
 ```
 Weasel (小狼毫)
     ↓
-rimevim-bridge.lua (检测 IME 状态变化)
+rimevim_bridge.lua (检测 IME 状态变化)
     ↓
-%TEMP%\rimevim-state.json (状态文件)
+%TEMP%\ime-state-rime.json (状态文件)
     ↓
-RimeStateFileWatcher.kt (Java WatchService 监听)
+StateWatcher (监听状态文件)
     ↓
 CaretColorManager.updateCaretColor() (更新光标颜色)
 ```

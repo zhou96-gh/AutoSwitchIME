@@ -5,7 +5,12 @@ import { RimeImeProvider } from './providers/RimeImeProvider';
 import { VimModeDetector } from './vim/VimModeDetector';
 import { CaretColorManager } from './ui/CaretColor';
 import { ImeStatusBar } from './ui/StatusBar';
-import { getSettings, onSettingsChanged, PluginSettings } from './settings';
+import {
+  getSettings,
+  onSettingsChanged,
+  PluginSettings,
+  restoreDefaultSettings,
+} from './settings';
 
 let outputChannel: vscode.OutputChannel;
 let logger: VSCodeLogger;
@@ -23,6 +28,19 @@ export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Auto Switch IME');
   logger = new VSCodeLogger(outputChannel);
   logger.info('AutoSwitchIME VSCode extension starting...');
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('autoSwitchIME.restoreDefaults', async () => {
+      await restoreDefaultSettings();
+      const reload = await vscode.window.showInformationMessage(
+        'Auto Switch IME 已恢复默认设置，重新加载窗口后全部生效。',
+        '重新加载窗口',
+      );
+      if (reload === '重新加载窗口') {
+        await vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
+    }),
+  );
 
   settings = getSettings();
   if (!settings.enabled) {

@@ -137,7 +137,7 @@ git commit -m "初始化 RimeVim IME 项目骨架"
 <idea-plugin>
     <id>com.rimevim.ime</id>
     <name>RimeVim IME</name>
-    <vendor email="user@example.com" url="https://github.com/user/RimeVimIME">RimeVim</vendor>
+    <vendor url="https://github.com/zhou96-gh/RimeVimIME">zhou96-gh</vendor>
 
     <description><![CDATA[
     Auto-switch IME (Rime/Weasel) based on Vim mode.

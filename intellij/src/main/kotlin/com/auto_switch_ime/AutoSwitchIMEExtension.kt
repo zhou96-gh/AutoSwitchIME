@@ -21,7 +21,7 @@ import com.auto_switch_ime.util.VimModeChecker
  *
  * 模式切换规则：
  * - Insert → 评估正则规则：中文规则→中文, 大写规则→大写, 默认→英文
- * - 其他 Vim 模式 → 保留输入状态并恢复 IDE 原生光标颜色
+ * - 其他 Vim 模式 → 进入时默认英文，之后允许手动切换，并恢复 IDE 原生光标颜色
  */
 class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
 

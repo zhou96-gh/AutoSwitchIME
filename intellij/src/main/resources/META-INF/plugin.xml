@@ -1,13 +1,13 @@
 <idea-plugin>
     <id>com.auto_switch_ime</id>
     <name>自动切换输入</name>
-    <vendor email="user@example.com" url="https://github.com/user/AutoSwitchIME">AutoSwitchIME</vendor>
+    <vendor url="https://github.com/zhou96-gh/RimeVimIME">zhou96-gh</vendor>
 
     <description><![CDATA[
     根据 Vim 模式自动切换输入法中英文状态（Rime/Weasel）。
     <ul>
-      <li>Normal 模式 → 英文 (ASCII)</li>
-      <li>Insert 模式 → 中文</li>
+      <li>Normal 等模式进入时默认英文，之后允许手动切换</li>
+      <li>Insert 模式根据光标上下文自动选择中文、大写或英文</li>
       <li>光标颜色指示 IME 状态</li>
     </ul>
     ]]></description>

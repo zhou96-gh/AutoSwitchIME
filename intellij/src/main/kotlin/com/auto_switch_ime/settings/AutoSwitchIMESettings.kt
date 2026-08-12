@@ -80,6 +80,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
     private var logWarnCheckBox: JCheckBox? = null
     private var logInfoCheckBox: JCheckBox? = null
     private var logDebugCheckBox: JCheckBox? = null
+    private var restoreDefaultsButton: JButton? = null
 
     // 调试区域
     private var testConfigButton: JButton? = null
@@ -192,18 +193,22 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         logDebugCheckBox = JCheckBox("调试 (DEBUG)")
         settingsPanel!!.add(logDebugCheckBox, gbc)
 
+        restoreDefaultsButton = JButton("恢复默认设置")
+        gbc.gridy = 15; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE
+        settingsPanel!!.add(restoreDefaultsButton, gbc)
+
         // 分隔线
-        gbc.gridy = 15; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 16; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(JSeparator(), gbc)
 
         // 调试区域标题
-        gbc.gridy = 16; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 17; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("调试工具:"), gbc)
 
         // 配置检测按钮
-        gbc.gridy = 17; gbc.gridx = 0; gbc.gridwidth = 1
+        gbc.gridy = 18; gbc.gridx = 0; gbc.gridwidth = 1
         testConfigButton = JButton("检测配置状态")
         settingsPanel!!.add(testConfigButton, gbc)
 
@@ -212,27 +217,27 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         configStatusArea!!.isEditable = false
         configStatusArea!!.lineWrap = true
         configStatusArea!!.wrapStyleWord = true
-        gbc.gridy = 18; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
+        gbc.gridy = 19; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(configStatusArea, gbc)
 
         // 正则测试区域
-        gbc.gridy = 19; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 20; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("正则规则测试 (分别输入光标前/后文本):"), gbc)
 
-        gbc.gridy = 20; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 21; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("光标前:"), gbc)
         regexBeforeField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0
         settingsPanel!!.add(regexBeforeField, gbc)
 
-        gbc.gridy = 21; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 22; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("光标后:"), gbc)
         regexAfterField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(regexAfterField, gbc)
 
-        gbc.gridy = 22; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 23; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
         regexTestButton = JButton("测试匹配")
         settingsPanel!!.add(regexTestButton, gbc)
 
@@ -241,7 +246,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         regexResultArea!!.isEditable = false
         regexResultArea!!.lineWrap = true
         regexResultArea!!.wrapStyleWord = true
-        gbc.gridy = 23; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
+        gbc.gridy = 24; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(regexResultArea, gbc)
 
         // 使用 BorderLayout 包装，消除顶部空白
@@ -254,6 +259,11 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         }
         regexTestButton?.addActionListener {
             testRegex()
+        }
+        restoreDefaultsButton?.addActionListener {
+            populateForm(AutoSwitchIMESettings())
+            configStatusArea?.text = "已恢复默认值，点击“应用”保存，点击“取消”撤销。"
+            regexResultArea?.text = ""
         }
 
         return wrapper
@@ -310,9 +320,12 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
     }
 
     override fun reset() {
-        val settings = AutoSwitchIMESettings.instance
+        populateForm(AutoSwitchIMESettings.instance)
+    }
+
+    private fun populateForm(settings: AutoSwitchIMESettings) {
         enabledCheckBox?.isSelected = settings.enabled
-        pathField?.text = settings.weaselServerPath.ifBlank { WeaselPathDetector.detect() ?: "" }
+        pathField?.text = settings.weaselServerPath
         englishColorPanel?.selectedColor = decodeColor(settings.englishColor)
         chineseColorPanel?.selectedColor = decodeColor(settings.chineseColor)
         capsLockColorPanel?.selectedColor = decodeColor(settings.capsLockColor)

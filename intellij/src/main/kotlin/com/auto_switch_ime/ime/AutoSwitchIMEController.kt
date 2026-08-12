@@ -26,6 +26,8 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import kotlinx.coroutines.runBlocking
 import java.util.ArrayDeque
+import java.util.Collections
+import java.util.WeakHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
@@ -41,6 +43,7 @@ class AutoSwitchIMEController : Disposable {
     private val disposed = AtomicBoolean(false)
     private val mailboxLock = Any()
     private val events = ArrayDeque<CoordinatorEvent>()
+    private val normalLikeDefaultsApplied = Collections.synchronizedMap(WeakHashMap<Editor, Boolean>())
     private var drainScheduled = false
 
     private val providerDelegate = lazy {
@@ -87,7 +90,12 @@ class AutoSwitchIMEController : Disposable {
             coordinatorState.focusEditor(editor)
             val normalLike = normalLikeOverride ?: VimModeChecker.isNormalLikeMode(editor)
             val decision = if (normalLike) null else InsertModeDecision.evaluate(editor, settings)
-            val action = if (normalLike) ImeAction.UNCHANGED else decision!!.action
+            if (!normalLike) normalLikeDefaultsApplied.remove(editor)
+            val action = when {
+                !normalLike -> decision!!.action
+                normalLikeDefaultsApplied[editor] == true -> ImeAction.UNCHANGED
+                else -> ImeAction.ENGLISH
+            }
             val duplicated = ActionDeduplicator.shouldSkip(editor, action)
 
             if (duplicated && !normalLike) {
@@ -118,6 +126,7 @@ class AutoSwitchIMEController : Disposable {
 
     fun onEditorFocusLost(editor: Editor) {
         if (disposed.get()) return
+        normalLikeDefaultsApplied.remove(editor)
         if (!coordinatorState.loseFocus(editor)) return
         postEvent(CoordinatorEvent.FocusLost(editor), discardPendingContexts = true)
     }
@@ -188,7 +197,7 @@ class AutoSwitchIMEController : Disposable {
             AutoSwitchIMELogger.info("Insert context: before='${it.before}', after='${it.after}'")
         }
 
-        if (event.normalLike) {
+        if (event.normalLike && event.action == ImeAction.UNCHANGED) {
             ApplicationManager.getApplication().invokeLater {
                 if (isCurrent(event)) CaretColorManager.restoreCaretColor(event.editor)
             }
@@ -206,6 +215,14 @@ class AutoSwitchIMEController : Disposable {
         }
 
         if (!isCurrent()) return
+        if (event.normalLike) {
+            normalLikeDefaultsApplied[event.editor] = true
+            ApplicationManager.getApplication().invokeLater {
+                if (isCurrent(event)) CaretColorManager.restoreCaretColor(event.editor)
+            }
+            return
+        }
+
         val targetState = when (event.action) {
             ImeAction.CHINESE -> ImeState(false, false)
             ImeAction.CAPS -> ImeState(true, true)
@@ -242,7 +259,10 @@ class AutoSwitchIMEController : Disposable {
             val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull {
                 !it.isDisposed && it.contentComponent.hasFocus()
             } ?: return@invokeLater
-            if (VimModeChecker.isNormalLikeMode(focusedEditor)) return@invokeLater
+            if (VimModeChecker.isNormalLikeMode(focusedEditor)) {
+                CaretColorManager.restoreCaretColor(focusedEditor)
+                return@invokeLater
+            }
 
             CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
         }

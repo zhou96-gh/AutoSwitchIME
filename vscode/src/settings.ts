@@ -8,6 +8,21 @@ import { ImeConfig, ImeType } from './core/types';
 import { RuleSet } from './core/RuleEvaluator';
 
 const CONFIG_SECTION = 'autoSwitchIME';
+const CONFIG_KEYS = [
+  'enabled',
+  'imeType',
+  'weaselServerPath',
+  'customSwitchScript',
+  'chineseBeforeRegex',
+  'chineseAfterRegex',
+  'capsBeforeRegex',
+  'capsAfterRegex',
+  'caretDebounceMs',
+  'chineseCaretColor',
+  'englishCaretColor',
+  'capsCaretColor',
+  'showStatusBarIndicator',
+] as const;
 
 /** 完整插件配置 */
 export interface PluginSettings {
@@ -76,4 +91,25 @@ export function onSettingsChanged(
       callback(getSettings());
     }
   });
+}
+
+/** 清除插件配置在各作用域的覆盖值，使其回落到 package.json 默认值。 */
+export async function restoreDefaultSettings(): Promise<void> {
+  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+  for (const key of CONFIG_KEYS) {
+    await config.update(key, undefined, vscode.ConfigurationTarget.Global);
+  }
+
+  if (vscode.workspace.workspaceFile || vscode.workspace.workspaceFolders?.length) {
+    for (const key of CONFIG_KEYS) {
+      await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  }
+
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const folderConfig = vscode.workspace.getConfiguration(CONFIG_SECTION, folder.uri);
+    for (const key of CONFIG_KEYS) {
+      await folderConfig.update(key, undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+    }
+  }
 }
