@@ -81,7 +81,7 @@ ime-sys/target/x86_64-pc-windows-gnu/release/
 
 ## GitHub 发布
 
-发布必须从最新 `master` 创建临时发布分支，完成版本、文档和打包流程修改后通过 PR 合入受保护的 `master`；不得直接推送 `master`。发布结束后删除本地和远端临时分支，日常只保留 `master`。
+`develop` 是长期开发与发布准备分支，必须同时保留在本地和远端；`master` 是受保护的正式发布分支，只接收从 `develop` 发起并合入的 PR，不得直接推送。发布完成后切回 `develop` 继续开发，并将已合入的 `master` 同步回 `develop`，避免分支历史偏离。
 
 ### 发布产物
 
@@ -98,10 +98,11 @@ Lua ZIP 必须至少包含 `rimevim_bridge.lua`、适用的 `*.custom.yaml` 示�
 1. 根据改动类型升级版本，并同步全部版本源和 `CHANGELOG.md`。
 2. 清理 `packages/` 中本次版本的同名残留，运行 `scripts/build-all.sh` 生成三个附件；重新发布时保留上一版本产物直至新 Release 验证成功。
 3. 运行版本一致性、IntelliJ 插件、VSCode 扩展和 Lua ZIP 内容检查，并记录三个附件的 SHA-256。
-4. 提交发布分支、推送远端并创建 PR；验证 PR 内容后合入 `master`。
+4. 在 `develop` 提交并推送发布变更，创建以 `master` 为目标分支的 PR；验证 PR 内容后合入 `master`。
 5. 确认远端 `master` 指向发布提交，再创建带注释的 `v<version>` 标签并推送该标签。
 6. 创建非草稿、非预发布的 GitHub Release，上传三个附件，并在正文中写明主要变更、安装入口和 SHA-256。
 7. 回读 Release，确认标签目标、附件名称、附件大小和下载地址均正确后，才算发布成功。
+8. 将发布后的 `master` 同步回 `develop` 并推送，保留本地和远端 `develop` 供下一版本继续开发。
 
 ### 重新发布与清理
 
