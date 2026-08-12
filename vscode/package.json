@@ -2,7 +2,7 @@
   "name": "auto-switch-ime",
   "displayName": "Auto Switch IME",
   "description": "Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示",
-  "version": "2.2.28",
+  "version": "2.2.29",
   "publisher": "auto-switch-ime",
   "license": "MIT",
   "repository": {

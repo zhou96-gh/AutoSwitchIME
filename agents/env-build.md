@@ -16,6 +16,10 @@
 
 IntelliJ 插件只设置 `pluginSinceBuild=261` 作为最低兼容版本，不设置 `until-build`。这样 IDE 常规升级不会仅因版本号变化而禁用插件；最终 ZIP 的兼容元数据由 `scripts/check-intellij-plugin.py` 校验。
 
+IntelliJ 主 JAR 必须包含 40×40 SVG 插件 Logo：`META-INF/pluginIcon.svg` 和 `META-INF/pluginIcon_dark.svg`。`scripts/check-intellij-plugin.py` 必须同时校验文件存在、SVG 尺寸和体积，避免 IDE 插件列表缺少图片。
+
+公共 PNG Logo 只维护根目录 `resources/icon.png`；VSCode 打包前由构建脚本复制到 `vscode/resources/icon.png`，不得提交该构建副本。
+
 ## Docker 构建
 
 ### 容器重建与清理边界

@@ -18,9 +18,13 @@ def gradle_property(name: str) -> str:
     return match.group(1)
 
 
-def read_plugin_xml(path: Path, version: str) -> bytes:
+def read_plugin_files(path: Path, version: str) -> tuple[bytes, dict[str, bytes]]:
     if path.suffix == ".xml":
-        return path.read_bytes()
+        icon_dir = path.parent
+        return path.read_bytes(), {
+            name: (icon_dir / name).read_bytes()
+            for name in ("pluginIcon.svg", "pluginIcon_dark.svg")
+        }
 
     with zipfile.ZipFile(path) as plugin_zip:
         jar_suffix = f"/lib/intellij-{version}.jar"
@@ -30,7 +34,26 @@ def read_plugin_xml(path: Path, version: str) -> bytes:
                 f"Expected one {jar_suffix} in {path}, found {len(plugin_jars)}"
             )
         with zipfile.ZipFile(io.BytesIO(plugin_zip.read(plugin_jars[0]))) as plugin_jar:
-            return plugin_jar.read("META-INF/plugin.xml")
+            return plugin_jar.read("META-INF/plugin.xml"), {
+                name: plugin_jar.read(f"META-INF/{name}")
+                for name in ("pluginIcon.svg", "pluginIcon_dark.svg")
+            }
+
+
+def validate_plugin_icon(name: str, content: bytes) -> list[str]:
+    errors = []
+    try:
+        root = ElementTree.fromstring(content)
+    except ElementTree.ParseError as error:
+        return [f"{name} is not valid SVG XML: {error}"]
+
+    if root.get("width") != "40" or root.get("height") != "40":
+        errors.append(
+            f"{name} must be 40x40, got {root.get('width')}x{root.get('height')}"
+        )
+    if len(content) > 3 * 1024:
+        errors.append(f"{name} exceeds 3 KiB: {len(content)} bytes")
+    return errors
 
 
 def main() -> int:
@@ -40,7 +63,8 @@ def main() -> int:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_path
 
     try:
-        root = ElementTree.fromstring(read_plugin_xml(path, version))
+        plugin_xml, icons = read_plugin_files(path, version)
+        root = ElementTree.fromstring(plugin_xml)
     except (FileNotFoundError, KeyError, ValueError, zipfile.BadZipFile) as error:
         print(f"Failed to inspect IntelliJ plugin metadata: {error}", file=sys.stderr)
         return 1
@@ -61,6 +85,8 @@ def main() -> int:
         )
     if until_build is not None:
         errors.append(f"until-build must be absent, got {until_build!r}")
+    for name, content in icons.items():
+        errors.extend(validate_plugin_icon(name, content))
 
     if errors:
         print("IntelliJ plugin metadata check failed:", file=sys.stderr)
@@ -70,7 +96,7 @@ def main() -> int:
 
     print(
         "IntelliJ plugin compatibility OK: "
-        f"version {version}, since-build {since_build}, no upper bound"
+        f"version {version}, since-build {since_build}, no upper bound, icons included"
     )
     return 0
 
