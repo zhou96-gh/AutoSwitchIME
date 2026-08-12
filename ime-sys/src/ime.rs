@@ -1,13 +1,28 @@
 use windows_sys::Win32::UI::Input::Ime::{
     ImmGetContext, ImmGetCompositionStringW, ImmReleaseContext, GCS_COMPSTR,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 
 /// 获取前台窗口句柄（后续可用于 IME 窗口检测占位）
 /// 返回窗口句柄，0 表示失败
 #[no_mangle]
 pub extern "C" fn ime_foreground_window() -> isize {
     unsafe { GetForegroundWindow() as isize }
+}
+
+/// 获取前台窗口所属进程 ID，0 表示无法获取。
+#[no_mangle]
+pub extern "C" fn ime_foreground_process_id() -> u32 {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_null() {
+            return 0;
+        }
+
+        let mut process_id = 0;
+        GetWindowThreadProcessId(hwnd, &mut process_id);
+        process_id
+    }
 }
 
 /// 检测前台窗口 IME 是否正在 composition（输入法中）

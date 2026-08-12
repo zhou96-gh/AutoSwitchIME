@@ -67,7 +67,11 @@ class RimeImeProvider(
                 if (!shouldContinue()) return
 
                 currentAsciiMode = ascii
-                switchImeMode(if (ascii) "/ascii" else "/nascii", if (ascii) "ASCII" else "Chinese")
+                switchImeMode(
+                    if (ascii) "/ascii" else "/nascii",
+                    if (ascii) "ASCII" else "Chinese",
+                    shouldContinue
+                )
             } finally {
                 stateWatcher.isForcingImeSwitch = false
             }
@@ -91,7 +95,7 @@ class RimeImeProvider(
                 if (!currentAsciiMode) {
                     if (!shouldContinue()) return
                     currentAsciiMode = true
-                    switchImeMode("/ascii", "ASCII")
+                    switchImeMode("/ascii", "ASCII", shouldContinue)
                 }
 
                 // 再开启 CapsLock
@@ -144,7 +148,7 @@ class RimeImeProvider(
         onStateChanged?.invoke(state.copy(isCapsLock = NativeImeSys.imeCapsRead()))
     }
 
-    private fun switchImeMode(arg: String, label: String) {
+    private fun switchImeMode(arg: String, label: String, shouldContinue: () -> Boolean) {
         val path = weaselServerPath
         if (path == null) {
             logger.warn("WeaselServer.exe not found")
@@ -157,6 +161,7 @@ class RimeImeProvider(
         }
 
         try {
+            if (!shouldContinue()) return
             logger.debug("Executing: $path $arg")
             val process = ProcessBuilder(path, arg)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)

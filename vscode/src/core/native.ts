@@ -14,6 +14,7 @@ function loadLib() {
     read: dll.func('ime_caps_read', 'int', []),
     toggle: dll.func('ime_caps_toggle', 'int', []),
     set: dll.func('ime_caps_set', 'int', ['int']),
+    foregroundWindow: tryFunc('ime_foreground_window', 'intptr', []),
     composing: tryFunc('ime_is_composing', 'int', []),
   };
 }
@@ -51,6 +52,11 @@ export function nativeCapsToggle(): boolean {
 
 export function nativeCapsSet(on: boolean): boolean {
   return lib !== null && lib.set(on ? 1 : 0) !== 0;
+}
+
+export function nativeForegroundWindow(): bigint {
+  const value = lib?.foregroundWindow?.();
+  return typeof value === 'bigint' ? value : BigInt(value ?? 0);
 }
 
 export function nativeIsComposing(): number {

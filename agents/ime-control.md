@@ -5,7 +5,7 @@
 ```
 ime-sys/ (Rust)
 ├── caps.rs: ime_caps_read / ime_caps_toggle / ime_caps_set (导出 i32)
-├── ime.rs: 占位（未使用）
+├── ime.rs: 前台窗口/进程检测与 composition 检测
 ├── ime-diag: CLI 一次性诊断
 ├── ime-helper: CLI 切换工具
 └── ime-watch: CLI 持续监听
@@ -46,7 +46,9 @@ Coordinator 是唯一自动切换入口：事件邮箱严格串行，新编辑�
 
 IntelliJ 和 VSCode 的 UI/监听器入口不得直接调用 Provider；必须向各自 Coordinator 提交事件。同步方法只允许控制器内部或非 UI 诊断路径使用，避免 `WeaselServer.exe` 等外部调用阻塞界面。
 
-所有会修改系统全局输入法或 CapsLock 的自动切换请求，必须在实际执行前同时确认 Coordinator 请求仍有效，且触发它的 IDE/VSCode 窗口和编辑器实时处于焦点中；不能只依赖先前收到的焦点事件。失焦后只允许释放插件自己开启的 CapsLock，不允许继续执行排队中的上下文切换。
+所有会修改系统全局输入法或 CapsLock 的自动切换请求，必须在实际执行前同时确认 Coordinator 请求仍有效、编辑器实时聚焦且 Win32 前台窗口仍属于触发请求的应用。IntelliJ 校验前台窗口进程 PID，VSCode 校验获得窗口焦点时登记的 HWND；不能只依赖先前收到的焦点事件。Provider 启动 WeaselServer 或修改 CapsLock 前必须再次调用同一有效性检查。原生前台归属检测不可用时必须拒绝切换，不能降级放行。失焦后只允许释放插件自己开启的 CapsLock，不允许继续执行排队中的上下文切换。
+
+Normal/Visual 等 normal-like 模式不执行输入法或 CapsLock 切换，保留用户当前输入状态。
 
 物理 CapsLock 是唯一真相源，无软件镜像状态。
 
@@ -69,7 +71,7 @@ interface ImeProvider {
 
 ## NativeImeSys (Kotlin JNA)
 
-加载 `ime_sys.dll`，通过 JNA 直接调用 `ime_caps_read/toggle/set`（返回 `Int`）。
+加载 `ime_sys.dll`，通过 JNA 直接调用 CapsLock、前台窗口/进程和 composition 检测接口。
 
 ## WeaselServer.exe 通信
 

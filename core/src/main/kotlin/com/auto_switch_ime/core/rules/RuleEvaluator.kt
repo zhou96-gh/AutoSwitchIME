@@ -10,8 +10,14 @@ import java.util.regex.Pattern
 object RuleEvaluator {
 
     private val patternCache = mutableMapOf<String, Pattern>()
-    private val trailingPunctuationOrSymbols = Pattern.compile("[\\p{P}\\p{S}]+$")
-    private val leadingPunctuationOrSymbols = Pattern.compile("^[\\p{P}\\p{S}]+")
+    private val trailingPunctuationSymbolsNumbersOrSpaces = Pattern.compile("[\\p{P}\\p{S}\\p{N}\\s]+$")
+    private val leadingPunctuationSymbolsNumbersOrSpaces = Pattern.compile("^[\\p{P}\\p{S}\\p{N}\\s]+")
+    private val trailingCapsSeparators = Pattern.compile("[-_\\p{N}\\s]+$")
+    private val leadingCapsSeparators = Pattern.compile("^[-_\\p{N}\\s]+")
+    private val trailingNeutralCharacters = Pattern.compile("[\\p{N}\\s]+$")
+    private val leadingNeutralCharacters = Pattern.compile("^[\\p{N}\\s]+")
+    private val trailingEnglishCharacter = Pattern.compile("[\\x21-\\x7E]$")
+    private val leadingEnglishCharacter = Pattern.compile("^[\\x21-\\x7E]")
 
     /**
      * 评估 Insert 模式下的输入法动作
@@ -35,25 +41,34 @@ object RuleEvaluator {
         englishBeforeRegex: String = "",
         englishAfterRegex: String = ""
     ): ImeAction {
-        val normalizedBefore = trailingPunctuationOrSymbols.matcher(before).replaceFirst("")
-        val normalizedAfter = leadingPunctuationOrSymbols.matcher(after).replaceFirst("")
+        val chineseBefore = trailingPunctuationSymbolsNumbersOrSpaces.matcher(before).replaceFirst("")
+        val chineseAfter = leadingPunctuationSymbolsNumbersOrSpaces.matcher(after).replaceFirst("")
+        val capsBefore = trailingCapsSeparators.matcher(before).replaceFirst("")
+        val capsAfter = leadingCapsSeparators.matcher(after).replaceFirst("")
+        val englishBefore = trailingNeutralCharacters.matcher(before).replaceFirst("")
+        val englishAfter = leadingNeutralCharacters.matcher(after).replaceFirst("")
 
-        // 1. 检查中文规则：前后任一匹配
-        if (matchesRegex(chineseBeforeRegex, normalizedBefore) || matchesRegex(chineseAfterRegex, normalizedAfter)) {
+        // 光标两侧同时命中时，以左侧上下文为准。
+        if (matchesRegex(capsBeforeRegex, capsBefore)) {
+            return ImeAction.CAPS
+        }
+        if (matchesRegex(englishBeforeRegex, englishBefore) || trailingEnglishCharacter.matcher(englishBefore).find()) {
+            return ImeAction.ENGLISH
+        }
+        if (matchesRegex(chineseBeforeRegex, chineseBefore)) {
             return ImeAction.CHINESE
         }
 
-        // 2. 检查大写规则：前后任一匹配
-        if (matchesRegex(capsBeforeRegex, normalizedBefore) || matchesRegex(capsAfterRegex, normalizedAfter)) {
+        if (matchesRegex(capsAfterRegex, capsAfter)) {
             return ImeAction.CAPS
         }
-
-        // 3. 检查英文规则：前后任一匹配
-        if (matchesRegex(englishBeforeRegex, normalizedBefore) || matchesRegex(englishAfterRegex, normalizedAfter)) {
+        if (matchesRegex(englishAfterRegex, englishAfter) || leadingEnglishCharacter.matcher(englishAfter).find()) {
             return ImeAction.ENGLISH
         }
+        if (matchesRegex(chineseAfterRegex, chineseAfter)) {
+            return ImeAction.CHINESE
+        }
 
-        // 4. 默认英文
         return ImeAction.ENGLISH
     }
 

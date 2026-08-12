@@ -53,7 +53,7 @@ export function isVisualMode(mode: VimMode): boolean {
 
 /**
  * 判断当前是否处于需要按 Normal 处理的 Vim 模式
- * 只有无选区的 Insert/UNKNOWN 按规则切换，其他已知 Vim 模式强制英文
+ * 只有无选区的 Insert/UNKNOWN 按规则切换，其他已知 Vim 模式保留当前输入状态
  */
 export function isNormalLikeMode(mode: VimMode, hasSelection = false): boolean {
   if (hasSelection) {

@@ -9,6 +9,7 @@ import com.auto_switch_ime.core.ImeType
 import com.auto_switch_ime.core.coordinator.CoordinatorRequest
 import com.auto_switch_ime.core.coordinator.CoordinatorState
 import com.auto_switch_ime.core.ime.ImeStateDetector
+import com.auto_switch_ime.core.ime.NativeImeSys
 import com.auto_switch_ime.core.ime.RimeImeProvider
 import com.auto_switch_ime.core.ime.StateWatcher
 import com.auto_switch_ime.core.ime.WeaselPathDetector
@@ -86,7 +87,7 @@ class AutoSwitchIMEController : Disposable {
             coordinatorState.focusEditor(editor)
             val normalLike = normalLikeOverride ?: VimModeChecker.isNormalLikeMode(editor)
             val decision = if (normalLike) null else InsertModeDecision.evaluate(editor, settings)
-            val action = if (normalLike) ImeAction.ENGLISH else decision!!.action
+            val action = if (normalLike) ImeAction.UNCHANGED else decision!!.action
             val duplicated = ActionDeduplicator.shouldSkip(editor, action)
 
             if (duplicated && !normalLike) {
@@ -187,6 +188,13 @@ class AutoSwitchIMEController : Disposable {
             AutoSwitchIMELogger.info("Insert context: before='${it.before}', after='${it.after}'")
         }
 
+        if (event.normalLike) {
+            ApplicationManager.getApplication().invokeLater {
+                if (isCurrent(event)) CaretColorManager.restoreCaretColor(event.editor)
+            }
+            return
+        }
+
         val isCurrent = { isCurrent(event) }
         runBlocking {
             when (event.action) {
@@ -217,7 +225,9 @@ class AutoSwitchIMEController : Disposable {
 
     private fun isCurrent(event: CoordinatorEvent.EditorContext): Boolean {
         val platformFocused = !event.editor.isDisposed && event.editor.contentComponent.hasFocus()
-        return coordinatorState.isCurrent(event.request, platformFocused)
+        val foregroundProcessId = NativeImeSys.imeForegroundProcessId()
+        val sameProcess = foregroundProcessId != 0L && foregroundProcessId == ProcessHandle.current().pid()
+        return coordinatorState.isCurrent(event.request, platformFocused && sameProcess)
     }
 
     private fun handleFocusLost(event: CoordinatorEvent.FocusLost) {
@@ -232,15 +242,9 @@ class AutoSwitchIMEController : Disposable {
             val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull {
                 !it.isDisposed && it.contentComponent.hasFocus()
             } ?: return@invokeLater
+            if (VimModeChecker.isNormalLikeMode(focusedEditor)) return@invokeLater
 
-            val normalLike = VimModeChecker.isNormalLikeMode(focusedEditor)
-            if (normalLike && (!state.isAsciiMode || state.isCapsLock)) {
-                requestEditorUpdate(focusedEditor, "PhysicalState", normalLikeOverride = true)
-            } else if (normalLike) {
-                CaretColorManager.updateCaretColor(focusedEditor, true, false)
-            } else {
-                CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
-            }
+            CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
         }
     }
 

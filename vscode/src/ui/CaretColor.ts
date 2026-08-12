@@ -50,8 +50,21 @@ export class CaretColorManager implements vscode.Disposable {
     await writeColorCustomizations(all);
   }
 
+  async restoreCaretColor(): Promise<void> {
+    if (this.currentAction === ImeAction.UNCHANGED) return;
+    this.currentAction = ImeAction.UNCHANGED;
+    const all = readColorCustomizations();
+    this.restoreOriginalColors(all);
+    await writeColorCustomizations(all);
+  }
+
   async dispose(): Promise<void> {
     const all = readColorCustomizations();
+    this.restoreOriginalColors(all);
+    await writeColorCustomizations(all);
+  }
+
+  private restoreOriginalColors(all: Record<string, unknown>): void {
     if (this.originalCursorColor) {
       all[CURSOR_FG] = this.originalCursorColor;
       all[TERMINAL_CURSOR_FG] = this.originalCursorColor;
@@ -59,7 +72,6 @@ export class CaretColorManager implements vscode.Disposable {
       delete all[CURSOR_FG];
       delete all[TERMINAL_CURSOR_FG];
     }
-    await writeColorCustomizations(all);
   }
 
   private colorFor(action: ImeAction): string {

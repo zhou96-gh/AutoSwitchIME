@@ -16,8 +16,14 @@ export interface RuleSet {
 
 /** 正则 Pattern 缓存 */
 const patternCache = new Map<string, RegExp>();
-const trailingPunctuationOrSymbols = /[\p{P}\p{S}]+$/u;
-const leadingPunctuationOrSymbols = /^[\p{P}\p{S}]+/u;
+const trailingPunctuationSymbolsNumbersOrSpaces = /[\p{P}\p{S}\p{N}\s]+$/u;
+const leadingPunctuationSymbolsNumbersOrSpaces = /^[\p{P}\p{S}\p{N}\s]+/u;
+const trailingCapsSeparators = /[-_\p{N}\s]+$/u;
+const leadingCapsSeparators = /^[-_\p{N}\s]+/u;
+const trailingNeutralCharacters = /[\p{N}\s]+$/u;
+const leadingNeutralCharacters = /^[\p{N}\s]+/u;
+const trailingEnglishCharacter = /[\x21-\x7E]$/u;
+const leadingEnglishCharacter = /^[\x21-\x7E]/u;
 
 /**
  * 评估 Insert 模式下的输入法动作
@@ -27,26 +33,34 @@ export function evaluateRules(
   after: string,
   rules: RuleSet,
 ): ImeAction {
-  const normalizedBefore = before.replace(trailingPunctuationOrSymbols, '');
-  const normalizedAfter = after.replace(leadingPunctuationOrSymbols, '');
+  const chineseBefore = before.replace(trailingPunctuationSymbolsNumbersOrSpaces, '');
+  const chineseAfter = after.replace(leadingPunctuationSymbolsNumbersOrSpaces, '');
+  const capsBefore = before.replace(trailingCapsSeparators, '');
+  const capsAfter = after.replace(leadingCapsSeparators, '');
+  const englishBefore = before.replace(trailingNeutralCharacters, '');
+  const englishAfter = after.replace(leadingNeutralCharacters, '');
 
-  // 1. 检查中文规则：前后任一匹配
-  if (
-    matchesRegex(rules.chineseBeforeRegex, normalizedBefore) ||
-    matchesRegex(rules.chineseAfterRegex, normalizedAfter)
-  ) {
+  // 光标两侧同时命中时，以左侧上下文为准。
+  if (matchesRegex(rules.capsBeforeRegex, capsBefore)) {
+    return ImeAction.CAPS;
+  }
+  if (trailingEnglishCharacter.test(englishBefore)) {
+    return ImeAction.ENGLISH;
+  }
+  if (matchesRegex(rules.chineseBeforeRegex, chineseBefore)) {
     return ImeAction.CHINESE;
   }
 
-  // 2. 检查大写规则：前后任一匹配
-  if (
-    matchesRegex(rules.capsBeforeRegex, normalizedBefore) ||
-    matchesRegex(rules.capsAfterRegex, normalizedAfter)
-  ) {
+  if (matchesRegex(rules.capsAfterRegex, capsAfter)) {
     return ImeAction.CAPS;
   }
+  if (leadingEnglishCharacter.test(englishAfter)) {
+    return ImeAction.ENGLISH;
+  }
+  if (matchesRegex(rules.chineseAfterRegex, chineseAfter)) {
+    return ImeAction.CHINESE;
+  }
 
-  // 3. 默认英文（英文不需要正则匹配）
   return ImeAction.ENGLISH;
 }
 

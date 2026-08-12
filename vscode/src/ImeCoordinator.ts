@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { CoordinatorRequest, CoordinatorState } from './core/CoordinatorState';
 import { EventMailbox } from './core/EventMailbox';
+import { nativeForegroundWindow } from './core/native';
 import { evaluateRules } from './core/RuleEvaluator';
 import { ImeAction, ImeState, Logger, VimMode } from './core/types';
 import { RimeImeProvider } from './providers/RimeImeProvider';
@@ -18,6 +19,7 @@ type CoordinatorEvent =
       request: EditorRequest;
       action: ImeAction;
       normalLike: boolean;
+      foregroundWindow: bigint;
       vimMode: VimMode;
       before: string;
       after: string;
@@ -43,6 +45,9 @@ export class ImeCoordinator {
   private throttledEditor: vscode.TextEditor | null = null;
   private programmaticCapsChange = false;
   private programmaticCapsChangeTimer: ReturnType<typeof setTimeout> | null = null;
+  private focusedWindow = vscode.window.state.focused
+    ? nativeForegroundWindow()
+    : 0n;
 
   constructor(
     private readonly provider: RimeImeProvider,
@@ -87,7 +92,7 @@ export class ImeCoordinator {
     const normalLike = isNormalLikeMode(vimMode, hasSelection(editor));
     const { before, after } = getLineContextText(editor, this.logger);
     const action = normalLike
-      ? ImeAction.ENGLISH
+      ? ImeAction.UNCHANGED
       : evaluateRules(before, after, settings.rules);
 
     if (this.shouldSkipAction(editor, action) && !normalLike) {
@@ -105,6 +110,7 @@ export class ImeCoordinator {
         request,
         action,
         normalLike,
+        foregroundWindow: nativeForegroundWindow(),
         vimMode,
         before,
         after,
@@ -141,11 +147,13 @@ export class ImeCoordinator {
 
   onWindowFocusChanged(focused: boolean): void {
     if (focused) {
+      this.focusedWindow = nativeForegroundWindow();
       const editor = vscode.window.activeTextEditor;
       if (editor) this.state.focusEditor(editor);
       return;
     }
 
+    this.focusedWindow = 0n;
     this.state.loseFocus();
     this.clearThrottleTimer();
     this.mailbox.clear(isPendingEditorEvent);
@@ -220,12 +228,12 @@ export class ImeCoordinator {
   private async handleEditorContext(
     event: Extract<CoordinatorEvent, { kind: 'editor-context' }>,
   ): Promise<void> {
-    if (!this.isCurrent(event.editor, event.request)) return;
+    if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
 
     const modeBefore = this.provider.currentAsciiMode;
     if (!event.normalLike && !modeBefore) {
       const composing = await this.provider.isComposing();
-      if (!this.isCurrent(event.editor, event.request)) return;
+      if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
       if (composing) {
         this.logger.debug('Rime is composing, skipping IME switch');
         this.applyColorAndStatus(actionFromState(this.provider.getTrackedState()), this.provider.getTrackedState());
@@ -234,14 +242,17 @@ export class ImeCoordinator {
     }
 
     if (event.normalLike) {
-      this.logger.debug(`Normal-like Vim mode: ${event.vimMode}, forcing ASCII`);
+      this.logger.debug(`Normal-like Vim mode: ${event.vimMode}, preserving IME state`);
+      await this.caretColor.restoreCaretColor();
+      return;
     } else {
       this.logger.debug(
         `Insert mode: before="${event.before}", after="${event.after}", action=${event.action}`,
       );
     }
 
-    const isCurrent = () => this.isCurrent(event.editor, event.request);
+    const isCurrent = () =>
+      this.isCurrent(event.editor, event.request, event.foregroundWindow);
     switch (event.action) {
       case ImeAction.CHINESE:
         this.markProgrammaticCapsChangeIfNeeded(false);
@@ -270,15 +281,7 @@ export class ImeCoordinator {
 
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
-    if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
-      if (!state.isAsciiMode || state.isCapsLock) {
-        this.requestEditorUpdate(editor);
-      } else {
-        this.applyColorAndStatus(ImeAction.ENGLISH, state, true);
-      }
-      return;
-    }
-
+    if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) return;
     this.applyColorAndStatus(actionFromState(state), state);
   }
 
@@ -288,7 +291,6 @@ export class ImeCoordinator {
     if (!editor) return;
 
     if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
-      this.requestEditorUpdate(editor);
       return;
     }
 
@@ -325,8 +327,15 @@ export class ImeCoordinator {
   private isCurrent(
     editor: vscode.TextEditor,
     request: EditorRequest,
+    foregroundWindow = 0n,
   ): boolean {
-    return this.state.isCurrent(request, this.isEditorActive(editor));
+    const currentForegroundWindow = nativeForegroundWindow();
+    const sameForegroundWindow =
+      foregroundWindow !== 0n && currentForegroundWindow === foregroundWindow;
+    return this.state.isCurrent(
+      request,
+      this.isEditorActive(editor) && sameForegroundWindow,
+    );
   }
 
   private isEditorActive(editor: vscode.TextEditor): boolean {
@@ -334,6 +343,8 @@ export class ImeCoordinator {
       !this.state.isShuttingDown() &&
       this.getSettings().enabled &&
       vscode.window.state.focused &&
+      this.focusedWindow !== 0n &&
+      nativeForegroundWindow() === this.focusedWindow &&
       vscode.window.activeTextEditor === editor
     );
   }

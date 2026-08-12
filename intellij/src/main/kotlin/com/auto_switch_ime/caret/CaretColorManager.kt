@@ -40,6 +40,20 @@ object CaretColorManager {
         editor.contentComponent.repaint()
     }
 
+    fun restoreCaretColor(editor: Editor) {
+        editor.caretModel.allCarets.forEach { caret ->
+            val currentAttributes = caret.visualAttributes
+            val restoredAttributes = CaretVisualAttributes(
+                null,
+                currentAttributes.weight,
+                currentAttributes.shape,
+                currentAttributes.thickness
+            )
+            caret.setVisualAttributes(restoredAttributes)
+        }
+        editor.contentComponent.repaint()
+    }
+
     private fun parseColor(hex: String?, default: Color): Color {
         return try {
             if (hex.isNullOrBlank()) default

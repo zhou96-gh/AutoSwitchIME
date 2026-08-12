@@ -170,7 +170,7 @@ class AutoSwitchIMEPlugin : ProjectActivity {
      * 更新编辑器状态 — 只需切换输入法，颜色由状态文件回调自动更新
      *
      * 无 IdeaVim 时：按 Insert 模式处理，使用正则规则切换输入法
-     * 有 IdeaVim 时：只有 Insert 模式执行规则切换，其他 Vim 模式按 Normal 强制英文
+     * 有 IdeaVim 时：只有 Insert 模式执行规则切换，其他 Vim 模式保留输入和原生光标表现
      *
      * 注意：
      * - Rime 正在输入（显示候选词窗口）时跳过输入法切换
@@ -202,7 +202,11 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                 val editors = EditorFactory.getInstance().allEditors
                 for (editor in editors) {
                     if (!editor.isDisposed) {
-                        CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
+                        if (com.auto_switch_ime.util.VimModeChecker.isNormalLikeMode(editor)) {
+                            CaretColorManager.restoreCaretColor(editor)
+                        } else {
+                            CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
+                        }
                         val fileName = FileDocumentManager.getInstance().getFile(editor.document)?.name ?: "(unnamed)"
                         AutoSwitchIMELogger.debug("Initialized caret color for editor: $fileName")
                     }

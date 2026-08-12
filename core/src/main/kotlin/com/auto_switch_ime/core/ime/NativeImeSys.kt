@@ -15,6 +15,7 @@ object NativeImeSys {
         fun ime_caps_toggle(): Int
         fun ime_caps_set(on: Int): Int
         fun ime_foreground_window(): Long
+        fun ime_foreground_process_id(): Int
         fun ime_is_composing(): Int
     }
 
@@ -46,6 +47,14 @@ object NativeImeSys {
         return lib?.ime_caps_set(if (on) 1 else 0)?.let { it != 0 } ?: false
     }
 
+    fun imeForegroundProcessId(): Long {
+        return try {
+            lib?.ime_foreground_process_id()?.toLong()?.and(0xFFFF_FFFFL) ?: 0L
+        } catch (_: UnsatisfiedLinkError) {
+            0L
+        }
+    }
+
     fun imeIsComposing(): Int {
         return try {
             lib?.ime_is_composing() ?: -1
@@ -58,7 +67,7 @@ object NativeImeSys {
         val resource = "/native/ime_sys.dll"
         val dest = File(
             System.getProperty("java.io.tmpdir"),
-            "ime_sys/ime_sys.dll"
+            "ime_sys/${ProcessHandle.current().pid()}/ime_sys.dll"
         )
         if (dest.exists()) return dest.absolutePath
 

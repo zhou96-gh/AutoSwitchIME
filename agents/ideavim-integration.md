@@ -32,7 +32,7 @@ override fun modeChanged(editor: VimEditor, oldMode: Mode) {
 }
 ```
 
-注意：只要当前编辑器存在活动选区，即使 IdeaVim 仍报告 `Mode.INSERT`，也必须按选中/Visual 模式处理并强制英文。
+注意：只要当前编辑器存在活动选区，即使 IdeaVim 仍报告 `Mode.INSERT`，也必须按选中/Visual 模式处理。Normal/Visual 等模式不强制输入法状态，并恢复 IDE 原生光标颜色。
 监听器只提交编辑器上下文事件，不直接调用 Provider 或更新目标光标颜色；动作决策和系统切换由 `AutoSwitchIMEController` 串行处理。
 
 ## 核心文件

@@ -8,6 +8,8 @@ python3 -B scripts/check-version-consistency.py
 echo "=== 1/3: Rust 原生模块 ==="
 cd /workspace/ime-sys
 cargo build --release --target x86_64-pc-windows-gnu 2>&1
+cp /workspace/ime-sys/target/x86_64-pc-windows-gnu/release/ime_sys.dll \
+  /workspace/intellij/src/main/resources/native/ime_sys.dll
 echo "Rust build done"
 
 echo "=== 2/3: IntelliJ 插件 ==="

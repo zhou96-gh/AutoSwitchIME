@@ -145,7 +145,7 @@ export class RimeImeProvider implements ImeProvider {
       if (!shouldContinue()) return;
 
       this.currentAsciiMode = ascii;
-      await this.switchImeMode(ascii ? '/ascii' : '/nascii');
+      await this.switchImeMode(ascii ? '/ascii' : '/nascii', shouldContinue);
     } finally {
       this.stateWatcher.isForcingImeSwitch = false;
     }
@@ -163,7 +163,7 @@ export class RimeImeProvider implements ImeProvider {
       if (!this.currentAsciiMode) {
         if (!shouldContinue()) return;
         this.currentAsciiMode = true;
-        await this.switchImeMode('/ascii');
+        await this.switchImeMode('/ascii', shouldContinue);
       }
     } finally {
       this.stateWatcher.isForcingImeSwitch = false;
@@ -184,7 +184,7 @@ export class RimeImeProvider implements ImeProvider {
       if (!this.currentAsciiMode) {
         if (!shouldContinue()) return;
         this.currentAsciiMode = true;
-        await this.switchImeMode('/ascii');
+        await this.switchImeMode('/ascii', shouldContinue);
       }
 
       // 开启 CapsLock（含重试 + 验证）
@@ -281,7 +281,10 @@ export class RimeImeProvider implements ImeProvider {
     });
   }
 
-  private async switchImeMode(arg: string): Promise<void> {
+  private async switchImeMode(
+    arg: string,
+    shouldContinue: () => boolean,
+  ): Promise<void> {
     const exePath = this.weaselServerPath;
     if (!exePath) {
       if (!this.warnedMissing) {
@@ -300,6 +303,7 @@ export class RimeImeProvider implements ImeProvider {
     }
 
     try {
+      if (!shouldContinue()) return;
       this.logger.debug(`执行: ${exePath} ${arg}`);
       await execFileAsync(exePath, [arg], {
         timeout: 3000,
