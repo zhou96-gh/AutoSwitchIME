@@ -28,9 +28,10 @@ test('insert mode delegates to context rules', () => {
   assert.equal(resolveNormalModeAction(VimMode.INSERT, false, false), null);
 });
 
-test('manual chinese switch is rejected only in strict normal', () => {
-  assert.equal(shouldEnforceNormalEnglish(VimMode.NORMAL, false, false), true);
-  assert.equal(shouldEnforceNormalEnglish(VimMode.NORMAL, false, true), false);
-  assert.equal(shouldEnforceNormalEnglish(VimMode.NORMAL, true, false), false);
-  assert.equal(shouldEnforceNormalEnglish(VimMode.VISUAL, false, false), false);
+test('manual chinese or caps switch is rejected only in strict normal', () => {
+  assert.equal(shouldEnforceNormalEnglish(VimMode.NORMAL, false, false, false), true);
+  assert.equal(shouldEnforceNormalEnglish(VimMode.NORMAL, false, true, true), true);
+  assert.equal(shouldEnforceNormalEnglish(VimMode.NORMAL, false, true, false), false);
+  assert.equal(shouldEnforceNormalEnglish(VimMode.NORMAL, true, false, true), false);
+  assert.equal(shouldEnforceNormalEnglish(VimMode.VISUAL, false, false, true), false);
 });

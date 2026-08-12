@@ -131,6 +131,7 @@ class AutoSwitchIMEController : Disposable {
                     request = request,
                     action = action,
                     normalLike = normalLike,
+                    strictNormal = strictNormal,
                     context = decision?.context,
                     source = source
                 )
@@ -170,7 +171,8 @@ class AutoSwitchIMEController : Disposable {
         if (strictNormalEditors[focusedEditor] != true) return
 
         provider.stateWatcher.refresh()
-        if (!provider.getTrackedState().isAsciiMode) {
+        val state = provider.getTrackedState()
+        if (!state.isAsciiMode || state.isCapsLock) {
             requestEditorUpdate(
                 editor = focusedEditor,
                 source = "NormalKeyReleased",
@@ -237,35 +239,23 @@ class AutoSwitchIMEController : Disposable {
             AutoSwitchIMELogger.info("Insert context: before='${it.before}', after='${it.after}'")
         }
 
-        if (event.normalLike && event.action == ImeAction.UNCHANGED) {
-            updateCaretWhenCurrent(event, provider.getTrackedState())
-            return
-        }
-
         val isCurrent = { isCurrent(event) }
-        runBlocking {
-            when (event.action) {
-                ImeAction.CHINESE -> provider.setAsciiMode(false, isCurrent)
-                ImeAction.CAPS -> provider.setCapsMode(isCurrent)
-                ImeAction.ENGLISH -> provider.setAsciiMode(true, isCurrent)
-                ImeAction.UNCHANGED -> return@runBlocking
+        if (event.action != ImeAction.UNCHANGED) {
+            runBlocking {
+                when (event.action) {
+                    ImeAction.CHINESE -> provider.setAsciiMode(false, isCurrent)
+                    ImeAction.CAPS -> provider.setCapsMode(isCurrent)
+                    ImeAction.ENGLISH -> provider.setAsciiMode(true, isCurrent, event.strictNormal)
+                    ImeAction.UNCHANGED -> Unit
+                }
             }
         }
 
         if (!isCurrent()) return
         if (event.normalLike) {
             normalLikeDefaultsApplied[event.editor] = true
-            updateCaretWhenCurrent(event, provider.getTrackedState())
-            return
         }
-
-        val targetState = when (event.action) {
-            ImeAction.CHINESE -> ImeState(false, false)
-            ImeAction.CAPS -> ImeState(true, true)
-            ImeAction.ENGLISH -> ImeState(true, false)
-            ImeAction.UNCHANGED -> return
-        }
-        updateCaretWhenCurrent(event, targetState)
+        updateCaretWhenCurrent(event, provider.getTrackedState())
     }
 
     private fun updateCaretWhenCurrent(event: CoordinatorEvent.EditorContext, state: ImeState) {
@@ -296,14 +286,12 @@ class AutoSwitchIMEController : Disposable {
                 !it.isDisposed && it.contentComponent.hasFocus()
             } ?: return@invokeLater
             CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
-            if (VimModeChecker.isNormalLikeMode(focusedEditor)) {
-                if (NormalModePolicy.shouldEnforceEnglish(
-                        strictNormalEditors[focusedEditor] == true,
-                        state.isAsciiMode
-                    )) {
-                    requestEditorUpdate(focusedEditor, "PhysicalStateChanged")
-                }
-                return@invokeLater
+            if (NormalModePolicy.shouldEnforceEnglish(
+                    strictNormalEditors[focusedEditor] == true,
+                    state.isAsciiMode,
+                    state.isCapsLock
+                )) {
+                requestEditorUpdate(focusedEditor, "PhysicalStateChanged")
             }
         }
     }
@@ -342,6 +330,7 @@ class AutoSwitchIMEController : Disposable {
             val request: CoordinatorRequest<Editor>,
             val action: ImeAction,
             val normalLike: Boolean,
+            val strictNormal: Boolean,
             val context: InsertModeDecision.Context?,
             val source: String
         ) : CoordinatorEvent

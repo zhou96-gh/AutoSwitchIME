@@ -23,9 +23,10 @@ class NormalModePolicyTest {
     }
 
     @Test
-    fun `manual chinese switch is rejected only in strict normal`() {
-        assertEquals(true, NormalModePolicy.shouldEnforceEnglish(true, false))
-        assertEquals(false, NormalModePolicy.shouldEnforceEnglish(true, true))
-        assertEquals(false, NormalModePolicy.shouldEnforceEnglish(false, false))
+    fun `manual chinese or caps switch is rejected only in strict normal`() {
+        assertEquals(true, NormalModePolicy.shouldEnforceEnglish(true, false, false))
+        assertEquals(true, NormalModePolicy.shouldEnforceEnglish(true, true, true))
+        assertEquals(false, NormalModePolicy.shouldEnforceEnglish(true, true, false))
+        assertEquals(false, NormalModePolicy.shouldEnforceEnglish(false, false, true))
     }
 }

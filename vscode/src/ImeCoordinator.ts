@@ -25,6 +25,7 @@ type CoordinatorEvent =
       request: EditorRequest;
       action: ImeAction;
       normalLike: boolean;
+      strictNormal: boolean;
       foregroundWindow: bigint;
       vimMode: VimMode;
       before: string;
@@ -123,6 +124,7 @@ export class ImeCoordinator {
         request,
         action,
         normalLike,
+        strictNormal,
         foregroundWindow: nativeForegroundWindow(),
         vimMode,
         before,
@@ -263,46 +265,35 @@ export class ImeCoordinator {
       }
     }
 
-    if (event.normalLike && event.action === ImeAction.UNCHANGED) {
+    if (event.action === ImeAction.UNCHANGED) {
       this.logger.debug(`Normal-like Vim mode: ${event.vimMode}, preserving user-selected IME state`);
-      const state = this.provider.getTrackedState();
-      this.applyColorAndStatus(actionFromState(state), state, true);
-      return;
     } else {
       this.logger.debug(
         `Insert mode: before="${event.before}", after="${event.after}", action=${event.action}`,
       );
+      const isCurrent = () =>
+        this.isCurrent(event.editor, event.request, event.foregroundWindow);
+      switch (event.action) {
+        case ImeAction.CHINESE:
+          this.markProgrammaticCapsChangeIfNeeded(false);
+          await this.provider.setAsciiMode(false, isCurrent);
+          break;
+        case ImeAction.CAPS:
+          this.markProgrammaticCapsChangeIfNeeded(true);
+          await this.provider.setCapsMode(isCurrent);
+          break;
+        case ImeAction.ENGLISH:
+          this.markProgrammaticCapsChangeIfNeeded(false);
+          await this.provider.setAsciiMode(true, isCurrent, event.strictNormal);
+          break;
+      }
     }
 
-    const isCurrent = () =>
-      this.isCurrent(event.editor, event.request, event.foregroundWindow);
-    switch (event.action) {
-      case ImeAction.CHINESE:
-        this.markProgrammaticCapsChangeIfNeeded(false);
-        await this.provider.setAsciiMode(false, isCurrent);
-        break;
-      case ImeAction.CAPS:
-        this.markProgrammaticCapsChangeIfNeeded(true);
-        await this.provider.setCapsMode(isCurrent);
-        break;
-      case ImeAction.ENGLISH:
-        this.markProgrammaticCapsChangeIfNeeded(false);
-        await this.provider.setAsciiMode(true, isCurrent);
-        break;
-      case ImeAction.UNCHANGED:
-        return;
-    }
-
-    if (!isCurrent()) return;
+    if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
     if (event.normalLike) {
       this.normalLikeDefaultsApplied.set(event.editor, true);
-      const state = this.provider.getTrackedState();
-      this.applyColorAndStatus(actionFromState(state), state, true);
-      return;
     }
-
-    const state = stateFromAction(event.action);
-    this.applyColorAndStatus(event.action, state, event.normalLike);
+    this.applyTrackedColorAndStatus();
   }
 
   private async handlePhysicalState(state: ImeState): Promise<void> {
@@ -311,18 +302,15 @@ export class ImeCoordinator {
 
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
-    if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
-      this.applyColorAndStatus(actionFromState(state), state, true);
-      if (shouldEnforceNormalEnglish(
-        this.modeDetector.currentMode,
-        hasSelection(editor),
-        state.isAsciiMode,
-      )) {
-        this.requestEditorUpdate(editor);
-      }
-      return;
+    this.applyColorAndStatus(actionFromState(state), state, true);
+    if (shouldEnforceNormalEnglish(
+      this.modeDetector.currentMode,
+      hasSelection(editor),
+      state.isAsciiMode,
+      state.isCapsLock,
+    )) {
+      this.requestEditorUpdate(editor);
     }
-    this.applyColorAndStatus(actionFromState(state), state);
   }
 
   private async handleCapsChanged(current: boolean): Promise<void> {
@@ -330,9 +318,11 @@ export class ImeCoordinator {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
 
+    this.applyTrackedColorAndStatus();
     if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
-      const state = this.provider.getTrackedState();
-      this.applyColorAndStatus(actionFromState(state), state, true);
+      if (isStrictNormalMode(this.modeDetector.currentMode, hasSelection(editor)) && current) {
+        this.requestEditorUpdate(editor);
+      }
       return;
     }
 
@@ -418,6 +408,11 @@ export class ImeCoordinator {
     this.updateStatus(effectiveAction, state);
   }
 
+  private applyTrackedColorAndStatus(): void {
+    const state = this.provider.getTrackedState();
+    this.applyColorAndStatus(actionFromState(state), state, true);
+  }
+
   private updateStatus(action: ImeAction, state?: ImeState): void {
     const actualCapsLock = this.provider.getTrackedState().isCapsLock;
     const effectiveAction = actualCapsLock ? ImeAction.CAPS : action;
@@ -478,19 +473,6 @@ function hasSelection(editor: vscode.TextEditor | undefined): boolean {
 function actionFromState(state: ImeState): ImeAction {
   if (state.isCapsLock) return ImeAction.CAPS;
   return state.isAsciiMode ? ImeAction.ENGLISH : ImeAction.CHINESE;
-}
-
-function stateFromAction(action: ImeAction): ImeState {
-  switch (action) {
-    case ImeAction.CHINESE:
-      return { isAsciiMode: false, isCapsLock: false, isComposing: false };
-    case ImeAction.CAPS:
-      return { isAsciiMode: true, isCapsLock: true, isComposing: false };
-    case ImeAction.ENGLISH:
-      return { isAsciiMode: true, isCapsLock: false, isComposing: false };
-    case ImeAction.UNCHANGED:
-      return { isAsciiMode: true, isCapsLock: false, isComposing: false };
-  }
 }
 
 function getLineContextText(

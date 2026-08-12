@@ -124,28 +124,31 @@ export class RimeImeProvider implements ImeProvider {
   async setAsciiMode(
     ascii: boolean,
     shouldContinue: () => boolean = () => true,
+    forceLowercase = false,
   ): Promise<void> {
     if (!shouldContinue()) return;
     this.stateWatcher.isForcingImeSwitch = true;
     try {
       const capsOn = nativeCapsRead();
 
-      const alreadyAscii = this.currentAsciiMode === ascii;
-      if (alreadyAscii && !capsOn) return;
-
-      // 只关闭插件自己开启的 CapsLock，不影响用户手动开启的全局 CapsLock。
-      if (capsOn && this.ownsCapsLock) {
+      if (capsOn && (this.ownsCapsLock || forceLowercase)) {
         if (!shouldContinue()) return;
         await this.forceCapsOff(shouldContinue);
         if (!shouldContinue()) return;
         this.ownsCapsLock = false;
       }
 
-      if (alreadyAscii) return;
-      if (!shouldContinue()) return;
+      if (this.currentAsciiMode !== ascii) {
+        if (!shouldContinue()) return;
+        this.currentAsciiMode = ascii;
+        await this.switchImeMode(ascii ? '/ascii' : '/nascii', shouldContinue);
+      }
 
-      this.currentAsciiMode = ascii;
-      await this.switchImeMode(ascii ? '/ascii' : '/nascii', shouldContinue);
+      this.onStateChanged?.({
+        isAsciiMode: this.currentAsciiMode,
+        isCapsLock: nativeCapsRead(),
+        isComposing: this.fileIsComposing,
+      });
     } finally {
       this.stateWatcher.isForcingImeSwitch = false;
     }

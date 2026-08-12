@@ -11,7 +11,7 @@ object NormalModePolicy {
         return ImeAction.UNCHANGED
     }
 
-    fun shouldEnforceEnglish(strictNormal: Boolean, asciiMode: Boolean): Boolean {
-        return strictNormal && !asciiMode
+    fun shouldEnforceEnglish(strictNormal: Boolean, asciiMode: Boolean, capsLock: Boolean): Boolean {
+        return strictNormal && (!asciiMode || capsLock)
     }
 }
