@@ -1,6 +1,6 @@
 # RimeVimIME
 
-![Auto Switch IME](vscode/resources/icon.png)
+![Auto Switch IME](resources/icon.png)
 
 面向 Windows + 小狼毫（Rime/Weasel）的 Vim 输入法自动切换插件，同时支持 JetBrains IDE 和 VSCode。
 

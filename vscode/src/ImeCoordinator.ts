@@ -266,8 +266,7 @@ export class ImeCoordinator {
     if (event.normalLike && event.action === ImeAction.UNCHANGED) {
       this.logger.debug(`Normal-like Vim mode: ${event.vimMode}, preserving user-selected IME state`);
       const state = this.provider.getTrackedState();
-      this.updateStatus(actionFromState(state), state);
-      await this.caretColor.restoreCaretColor();
+      this.applyColorAndStatus(actionFromState(state), state, true);
       return;
     } else {
       this.logger.debug(
@@ -298,8 +297,7 @@ export class ImeCoordinator {
     if (event.normalLike) {
       this.normalLikeDefaultsApplied.set(event.editor, true);
       const state = this.provider.getTrackedState();
-      this.updateStatus(actionFromState(state), state);
-      await this.caretColor.restoreCaretColor();
+      this.applyColorAndStatus(actionFromState(state), state, true);
       return;
     }
 
@@ -314,8 +312,7 @@ export class ImeCoordinator {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
     if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
-      this.updateStatus(actionFromState(state), state);
-      await this.caretColor.restoreCaretColor();
+      this.applyColorAndStatus(actionFromState(state), state, true);
       if (shouldEnforceNormalEnglish(
         this.modeDetector.currentMode,
         hasSelection(editor),
@@ -334,6 +331,8 @@ export class ImeCoordinator {
     if (!editor) return;
 
     if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
+      const state = this.provider.getTrackedState();
+      this.applyColorAndStatus(actionFromState(state), state, true);
       return;
     }
 

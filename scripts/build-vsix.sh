@@ -7,6 +7,8 @@ cargo build --release --target x86_64-pc-windows-gnu 2>&1
 
 mkdir -p /workspace/vscode/bin
 cp /workspace/ime-sys/target/x86_64-pc-windows-gnu/release/ime_sys.dll /workspace/vscode/bin/ime_sys.dll
+mkdir -p /workspace/vscode/resources
+cp /workspace/resources/icon.png /workspace/vscode/resources/icon.png
 
 echo "=== 2/2: VSCode 扩展 ==="
 cd /workspace/vscode

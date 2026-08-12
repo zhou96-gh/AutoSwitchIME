@@ -21,6 +21,8 @@ echo "IntelliJ plugin done"
 echo "=== 3/4: VSCode 扩展 ==="
 mkdir -p /workspace/vscode/bin
 cp /workspace/ime-sys/target/x86_64-pc-windows-gnu/release/ime_sys.dll /workspace/vscode/bin/ime_sys.dll
+mkdir -p /workspace/vscode/resources
+cp /workspace/resources/icon.png /workspace/vscode/resources/icon.png
 
 cd /workspace/vscode
 npm ci --ignore-scripts --include=optional --os=win32 --cpu=x64 2>&1
