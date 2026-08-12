@@ -49,15 +49,17 @@ code --install-extension .\AutoSwitchIME-VSCode-<version>.vsix
 
 ### 部署 Rime 状态桥
 
-插件通过 Lua 桥读取小狼毫的真实中英文和候选状态。使用 WSL 时，可在仓库目录运行：
+插件通过 Lua 桥读取小狼毫的真实中英文和候选状态。先从 [Releases](https://github.com/zhou96-gh/RimeVimIME/releases/latest) 下载并解压 `RimeVimIME-Lua-<version>.zip`。
+
+使用 WSL 且已经克隆仓库时，也可以在仓库目录运行：
 
 ```bash
 ./scripts/ime-bridge-install.sh
 ```
 
-也可以手动部署：
+使用 Release 中的 Lua ZIP 手动部署：
 
-1. 将 `lua/rimevim_bridge.lua` 复制到 `%APPDATA%\Rime\lua\rimevim_bridge.lua`。
+1. 将解压后的 `rimevim_bridge.lua` 复制到 `%APPDATA%\Rime\lua\rimevim_bridge.lua`。
 2. 在当前方案对应的 `*.custom.yaml` 中加入：
 
 ```yaml
