@@ -238,9 +238,7 @@ class AutoSwitchIMEController : Disposable {
         }
 
         if (event.normalLike && event.action == ImeAction.UNCHANGED) {
-            ApplicationManager.getApplication().invokeLater {
-                if (isCurrent(event)) CaretColorManager.restoreCaretColor(event.editor)
-            }
+            updateCaretWhenCurrent(event, provider.getTrackedState())
             return
         }
 
@@ -257,9 +255,7 @@ class AutoSwitchIMEController : Disposable {
         if (!isCurrent()) return
         if (event.normalLike) {
             normalLikeDefaultsApplied[event.editor] = true
-            ApplicationManager.getApplication().invokeLater {
-                if (isCurrent(event)) CaretColorManager.restoreCaretColor(event.editor)
-            }
+            updateCaretWhenCurrent(event, provider.getTrackedState())
             return
         }
 
@@ -299,8 +295,8 @@ class AutoSwitchIMEController : Disposable {
             val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull {
                 !it.isDisposed && it.contentComponent.hasFocus()
             } ?: return@invokeLater
+            CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
             if (VimModeChecker.isNormalLikeMode(focusedEditor)) {
-                CaretColorManager.restoreCaretColor(focusedEditor)
                 if (NormalModePolicy.shouldEnforceEnglish(
                         strictNormalEditors[focusedEditor] == true,
                         state.isAsciiMode
@@ -309,8 +305,6 @@ class AutoSwitchIMEController : Disposable {
                 }
                 return@invokeLater
             }
-
-            CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
         }
     }
 

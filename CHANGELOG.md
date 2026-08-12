@@ -4,6 +4,7 @@
 
 ### 修复
 
+- 光标颜色在 Normal、Visual、Command 等模式下也始终与实际英文、中文或 CapsLock 输入状态一致。
 - 为 IntelliJ 插件补充浅色和深色主题 Logo，修复 IDE 插件列表没有图片。
 - 将公共 PNG Logo 提取到根目录，由 VSCode 打包流程生成扩展内副本。
 - 打包检查新增 IntelliJ Logo 文件、SVG 尺寸和体积校验。

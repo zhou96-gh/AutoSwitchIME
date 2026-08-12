@@ -21,8 +21,8 @@ import com.auto_switch_ime.util.VimModeChecker
  *
  * 模式切换规则：
  * - Insert → 评估正则规则：中文规则→中文, 大写规则→大写, 默认→英文
- * - Normal → 始终保持英文，并恢复 IDE 原生光标颜色
- * - 其他 normal-like 模式 → 进入时默认英文，之后允许手动切换，并恢复 IDE 原生光标颜色
+ * - Normal → 始终保持英文，光标颜色显示实际输入状态
+ * - 其他 normal-like 模式 → 进入时默认英文，之后允许手动切换，光标颜色显示实际输入状态
  */
 class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
 
@@ -63,11 +63,7 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
             val editors = EditorFactory.getInstance().allEditors
             for (editor in editors) {
                 if (!editor.isDisposed) {
-                    if (VimModeChecker.isNormalLikeMode(editor)) {
-                        CaretColorManager.restoreCaretColor(editor)
-                    } else {
-                        CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
-                    }
+                    CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
                     val fileName = FileDocumentManager.getInstance().getFile(editor.document)?.name ?: "(unnamed)"
                     AutoSwitchIMELogger.debug("Initialized caret color for editor: $fileName")
                 }

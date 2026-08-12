@@ -202,13 +202,11 @@ class AutoSwitchIMEPlugin : ProjectActivity {
                 val editors = EditorFactory.getInstance().allEditors
                 for (editor in editors) {
                     if (!editor.isDisposed) {
+                        CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
                         if (com.auto_switch_ime.util.VimModeChecker.isNormalLikeMode(editor)) {
-                            CaretColorManager.restoreCaretColor(editor)
                             if (editor.contentComponent.hasFocus()) {
                                 ctrl?.requestEditorUpdate(editor, "AutoSwitchIMEPluginInit")
                             }
-                        } else {
-                            CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
                         }
                         val fileName = FileDocumentManager.getInstance().getFile(editor.document)?.name ?: "(unnamed)"
                         AutoSwitchIMELogger.debug("Initialized caret color for editor: $fileName")
