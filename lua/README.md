@@ -34,14 +34,16 @@ patch:
 
 ## 验证安装
 
-部署后，在编辑器中切换一次中英文，检查 `%TEMP%\ime-state-rime.json` 文件是否生成并包含正确的状态：
+部署后，在编辑器中切换一次中英文，检查 `%TEMP%\ime-state-rime-v2.json` 文件是否生成并包含正确的协议 v2 状态：
 
 ```json
-{"ascii_mode": true, "caps_lock": false, "timestamp": 1716364800}
+{"protocol_version":2,"provider":"rime","session_token":"...","sequence":1,"ascii_mode":true,"caps_lock":false,"is_composing":false,"timestamp":1716364800}
 ```
 
 - `ascii_mode: true` = 英文模式
 - `ascii_mode: false` = 中文模式
+- `session_token` 标识 Lua 脚本当前绑定的 Rime Engine/Context 会话，不是 Weasel 内部未公开的数值 session ID
+- `sequence` 在同一 session 内递增，用于拒绝重复或倒序状态
 - `caps_lock: true` = Caps Lock 开启
 
 ## 故障排除
@@ -51,7 +53,7 @@ patch:
 1. 检查 Rime 用户目录的 `lua` 子目录是否存在
 2. 确认 `rimevim_bridge.lua` 文件已正确复制
 3. 检查 `default.custom.yaml`（或 `weasel.custom.yaml`、`rime_ice.custom.yaml`） 配置是否正确
-4. 查看 Rime 日志（`%APPDATA%\Rime\weasel.log`）是否有 Lua 错误
+4. 查看 `%LOCALAPPDATA%\Temp\rime.weasel\` 下最新日志是否有 Lua 错误
 
 ### 状态文件内容不正确
 
@@ -66,7 +68,7 @@ Weasel (小狼毫)
     ↓
 rimevim_bridge.lua (检测 IME 状态变化)
     ↓
-%TEMP%\ime-state-rime.json (状态文件)
+%TEMP%\ime-state-rime-v2.json (插件只读取协议 v2)
     ↓
 StateWatcher (监听状态文件)
     ↓

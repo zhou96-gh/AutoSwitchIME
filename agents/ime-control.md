@@ -15,7 +15,7 @@ core/ (Kotlin)
 ├── ImeProviderRegistry: 按 ImeType 注册和创建 Provider
 ├── RimeImeProvider (实现)
 ├── NativeImeSys (JNA → ime_sys.dll)
-└── StateWatcher (WatchService 监听状态文件)
+└── RimeStateWatcher (WatchService 监听并校验 Rime session 状态文件)
 
 intellij/ (Kotlin + JNA)
 ├── AutoSwitchIMEPlugin: 插件入口，加载 NativeImeSys
@@ -25,7 +25,7 @@ vscode/ (TypeScript + koffi)
 ├── native.ts: koffi → ime_sys.dll（FFI 直接调用）
 ├── ImeProviderRegistry.ts: 按 ImeType 注册和创建 Provider
 ├── RimeImeProvider.ts: ImeProvider 实现
-├── StateWatcher.ts: fs.watchFile 监听状态文件
+├── RimeStateWatcher: fs.watchFile 监听并校验 Rime session 状态文件
 ├── ImeCoordinator.ts: Promise mailbox，串行处理全部输入法事件
 └── extension.ts: 插件入口和事件监听器装配
 ```
@@ -107,6 +107,8 @@ scripts/ime-bridge-install.sh -h           # 帮助（WSL）
 
 ### 状态文件
 
-- 路径: `%TEMP%\ime-state-rime.json`
+- 路径: `%TEMP%\ime-state-rime-v2.json`
 - 写入方式: write-tmp-rename 原子写入
-- 字段: `ascii_mode`, `caps_lock`, `is_composing`, `timestamp`
+- 协议 v2 字段: `protocol_version`, `provider`, `session_token`, `sequence`, `ascii_mode`, `caps_lock`, `is_composing`, `timestamp`
+- librime-lua 不公开 Weasel/librime 数值 session ID；`session_token` 由每个 Lua `env.engine` 实例生成，表示脚本实际绑定的 Rime Engine/Context 会话。
+- Weasel 0.17.4 不向 librime-lua `Context` 提供客户端应用名，状态写入独立的 v2 文件；`RimeStateWatcher` 只接受完整的协议 v2 状态、`provider=rime` 和同一 token 内递增的 `sequence`，不接受协议 v1。

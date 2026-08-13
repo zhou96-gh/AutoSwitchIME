@@ -1,51 +1,75 @@
 /**
  * IME 状态文件监听器
  * 从 Kotlin core/ime/StateWatcher.kt 移植
- * 监听 Rime Lua 脚本写入的 %TEMP%\ime-state-rime.json
+ * 监听 Rime Lua 脚本写入的当前应用 session 状态文件
  */
 
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { ImeState, ImeType, Logger } from './types';
+import { ImeState, Logger } from './types';
 
-/** 获取输入法状态文件名 */
-function getStateFileName(type: ImeType): string {
-  switch (type) {
-    case ImeType.RIME:
-      return 'ime-state-rime.json';
-    case ImeType.SOGOU:
-      return 'ime-state-sogou.json';
-    case ImeType.MS_PINYIN:
-      return 'ime-state-mspinyin.json';
-    case ImeType.CUSTOM:
-      return 'ime-state-custom.json';
-  }
-}
+const RIME_STATE_FILE_NAME = 'ime-state-rime-v2.json';
 
 /**
- * 解析状态 JSON 中的布尔值
- * 使用正则提取，避免 JSON.parse 对不完整文件报错
+ * 解析 Rime session 状态 JSON；不完整写入直接返回 null。
  */
-export function parseStateJson(content: string): ImeState | null {
+export interface RimeSessionState {
+  state: ImeState;
+  sessionToken: string;
+  sequence: number;
+}
+
+export function parseRimeSessionState(content: string): RimeSessionState | null {
   try {
-    const asciiMode = extractBoolean(content, 'ascii_mode');
-    if (asciiMode === null) return null;
-    const capsLock = extractBoolean(content, 'caps_lock') ?? false;
-    const isComposing = extractBoolean(content, 'is_composing') ?? false;
-    return { isAsciiMode: asciiMode, isCapsLock: capsLock, isComposing };
+    const data = JSON.parse(content) as Record<string, unknown>;
+    if (
+      data.protocol_version !== 2 ||
+      data.provider !== 'rime' ||
+      typeof data.session_token !== 'string' || !data.session_token ||
+      typeof data.sequence !== 'number' ||
+      !Number.isSafeInteger(data.sequence) || data.sequence < 1 ||
+      typeof data.ascii_mode !== 'boolean' ||
+      typeof data.caps_lock !== 'boolean' ||
+      typeof data.is_composing !== 'boolean' ||
+      typeof data.timestamp !== 'number' ||
+      !Number.isSafeInteger(data.timestamp) || data.timestamp < 1
+    ) {
+      return null;
+    }
+
+    return {
+      state: {
+        isAsciiMode: data.ascii_mode,
+        isCapsLock: data.caps_lock,
+        isComposing: data.is_composing,
+      },
+      sessionToken: data.session_token,
+      sequence: data.sequence,
+    };
   } catch {
     return null;
   }
 }
 
-function extractBoolean(json: string, key: string): boolean | null {
-  const regex = new RegExp(`"${key}"\\s*:\\s*(true|false)`);
-  const match = regex.exec(json);
-  return match ? match[1] === 'true' : null;
+export class RimeSessionTracker {
+  private currentSessionToken: string | undefined;
+  private lastSequence = 0;
+  accept(update: RimeSessionState): boolean {
+    if (
+      update.sessionToken === this.currentSessionToken &&
+      update.sequence <= this.lastSequence
+    ) {
+      return false;
+    }
+
+    this.currentSessionToken = update.sessionToken;
+    this.lastSequence = update.sequence;
+    return true;
+  }
 }
 
-export class StateWatcher {
+export class RimeStateWatcher {
   private watcher: fs.FSWatcher | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private isRunning = false;
@@ -58,18 +82,18 @@ export class StateWatcher {
   isForcingImeSwitch = false;
 
   private readonly stateFilePath: string;
+  private readonly sessionTracker: RimeSessionTracker;
 
   constructor(
-    imeType: ImeType,
     private logger: Logger,
     private onStateChanged: (state: ImeState) => void,
-    private capsCheckFn?: () => boolean,
   ) {
-    const fileName = getStateFileName(imeType);
+    const fileName = RIME_STATE_FILE_NAME;
     this.stateFilePath = path.join(
       process.env.TEMP || os.tmpdir(),
       fileName,
     );
+    this.sessionTracker = new RimeSessionTracker();
   }
 
   start(): void {
@@ -80,9 +104,6 @@ export class StateWatcher {
 
     this.logger.info(`Starting StateWatcher, monitoring: ${this.stateFilePath}`);
     this.isRunning = true;
-
-    // 确保状态文件存在
-    this.ensureStateFile();
 
     // fs.watch 用于即时通知，轮询用于兜底 Windows 上可能丢失的文件事件。
     this.startFileWatch();
@@ -109,26 +130,13 @@ export class StateWatcher {
     this.readAndApplyState();
   }
 
-  private ensureStateFile(): void {
-    try {
-      if (!fs.existsSync(this.stateFilePath)) {
-        const dir = path.dirname(this.stateFilePath);
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(this.stateFilePath, '{"ascii_mode":true,"caps_lock":false,"is_composing":false}');
-        this.logger.debug('Created initial state file');
-      }
-    } catch (e) {
-      this.logger.warn('Failed to create state file', e as Error);
-    }
-  }
-
   private startFileWatch(): void {
     const dir = path.dirname(this.stateFilePath);
     const fileName = path.basename(this.stateFilePath);
 
     try {
       this.watcher = fs.watch(dir, (eventType, changedFile) => {
-        if (changedFile && (changedFile.includes('ime-state') || changedFile === fileName)) {
+        if (changedFile === fileName) {
           this.readAndApplyState();
         }
       });
@@ -160,13 +168,10 @@ export class StateWatcher {
     }
 
     try {
-      if (!fs.existsSync(this.stateFilePath)) return;
-
-      const content = fs.readFileSync(this.stateFilePath, 'utf-8').trim();
-      if (!content) return;
-
-      const state = parseStateJson(content);
-      if (!state) return;
+      const update = this.readStateFile(this.stateFilePath);
+      if (!update) return;
+      if (!this.sessionTracker.accept(update)) return;
+      const state = update.state;
 
       if (
         state.isAsciiMode !== this.lastAsciiMode ||
@@ -185,5 +190,12 @@ export class StateWatcher {
     } catch (e) {
       this.logger.debug('Failed to parse state file (may be in progress)');
     }
+  }
+
+  private readStateFile(stateFilePath: string): RimeSessionState | null {
+    if (!fs.existsSync(stateFilePath)) return null;
+    const content = fs.readFileSync(stateFilePath, 'utf-8').trim();
+    if (!content) return null;
+    return parseRimeSessionState(content);
   }
 }

@@ -55,7 +55,7 @@ object ImeStateDetector {
      * 1. 原生 DLL: ime_is_composing() 通过 IMM32 直接查前台窗口 IME 输入状态
      * 2. Fallback: Lua 状态文件（Rime ctx:is_composing()）
      */
-    fun isComposing(stateWatcher: StateWatcher): Boolean {
+    fun isComposing(stateWatcher: RimeStateWatcher): Boolean {
         val nativeResult = NativeImeSys.imeIsComposing()
         if (nativeResult >= 0) return nativeResult == 1
         return stateWatcher.isComposing
@@ -66,7 +66,7 @@ object ImeStateDetector {
      * @param stateWatcher 状态文件监听器
      * @param trackedState 内部跟踪状态（回退用）
      */
-    fun getCurrentState(stateWatcher: StateWatcher, trackedState: ImeState): ImeState {
+    fun getCurrentState(stateWatcher: RimeStateWatcher, trackedState: ImeState): ImeState {
         val user32 = MyUser32.INSTANCE
         val imm32 = Imm32.INSTANCE
 

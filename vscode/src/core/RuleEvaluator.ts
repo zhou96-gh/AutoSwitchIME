@@ -18,8 +18,7 @@ export interface RuleSet {
 const patternCache = new Map<string, RegExp>();
 const trailingPunctuationSymbolsNumbersOrSpaces = /[\p{P}\p{S}\p{N}\s]+$/u;
 const leadingPunctuationSymbolsNumbersOrSpaces = /^[\p{P}\p{S}\p{N}\s]+/u;
-const trailingCapsSeparators = /[-_\p{N}\s]+$/u;
-const leadingCapsSeparators = /^[-_\p{N}\s]+/u;
+const capsSeparators = /[-_]/gu;
 const trailingNeutralCharacters = /[\p{N}\s]+$/u;
 const leadingNeutralCharacters = /^[\p{N}\s]+/u;
 const trailingEnglishCharacter = /[\x21-\x7E]$/u;
@@ -35,8 +34,8 @@ export function evaluateRules(
 ): ImeAction {
   const chineseBefore = before.replace(trailingPunctuationSymbolsNumbersOrSpaces, '');
   const chineseAfter = after.replace(leadingPunctuationSymbolsNumbersOrSpaces, '');
-  const capsBefore = before.replace(trailingCapsSeparators, '');
-  const capsAfter = after.replace(leadingCapsSeparators, '');
+  const capsBefore = before.replace(trailingNeutralCharacters, '').replace(capsSeparators, '');
+  const capsAfter = after.replace(leadingNeutralCharacters, '').replace(capsSeparators, '');
   const englishBefore = before.replace(trailingNeutralCharacters, '');
   const englishAfter = after.replace(leadingNeutralCharacters, '');
 
