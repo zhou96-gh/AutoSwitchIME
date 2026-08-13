@@ -30,11 +30,18 @@ export enum ImeType {
   CUSTOM = 'custom',
 }
 
+export const AVAILABLE_IME_TYPES: readonly ImeType[] = [ImeType.RIME];
+
+export function availableImeTypeFor(value: string | undefined): ImeType {
+  return AVAILABLE_IME_TYPES.includes(value as ImeType)
+    ? value as ImeType
+    : ImeType.RIME;
+}
+
 /** 输入法配置 */
 export interface ImeConfig {
   type: ImeType;
   weaselServerPath?: string;
-  customSwitchScript?: string;
 }
 
 /** Vim 模式 */
@@ -77,13 +84,25 @@ export class VSCodeLogger implements Logger {
 
 /** IME Provider 接口（平台无关） */
 export interface ImeProvider {
+  readonly type: ImeType;
   readonly name: string;
 
+  onStateChanged?: (state: ImeState) => void;
+
+  start(): void;
+
   /** 切换中英文模式 */
-  setAsciiMode(ascii: boolean): Promise<void>;
+  setAsciiMode(
+    ascii: boolean,
+    shouldContinue?: () => boolean,
+    forceLowercase?: boolean,
+  ): Promise<void>;
+
+  /** 确保输入法处于英文模式，但不改变 CapsLock。 */
+  ensureAsciiMode(shouldContinue?: () => boolean): Promise<void>;
 
   /** 切换大写模式 */
-  setCapsMode(): Promise<void>;
+  setCapsMode(shouldContinue?: () => boolean): Promise<void>;
 
   /** 释放插件自身开启的 CapsLock */
   releaseOwnedCapsLock(): Promise<void>;
@@ -94,9 +113,26 @@ export interface ImeProvider {
   /** 获取当前跟踪的 IME 状态 */
   getTrackedState(): ImeState;
 
+  /** 获取当前实际 IME 状态，检测不可用时回退到跟踪状态。 */
+  getCurrentState(): ImeState;
+
+  /** 主动刷新 Provider 的状态源。 */
+  refreshState(): void;
+
   /** 同步内部跟踪状态 */
   syncTrackedState(ascii: boolean, caps: boolean): void;
 
   /** 释放资源 */
   dispose(): void;
+}
+
+export enum InputDisplayMode {
+  ENGLISH = 'ENGLISH',
+  CHINESE = 'CHINESE',
+  CAPS = 'CAPS',
+}
+
+export function inputDisplayModeFor(state: ImeState): InputDisplayMode {
+  if (state.isCapsLock) return InputDisplayMode.CAPS;
+  return state.isAsciiMode ? InputDisplayMode.ENGLISH : InputDisplayMode.CHINESE;
 }

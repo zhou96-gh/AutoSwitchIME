@@ -12,6 +12,7 @@
 | 字段 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
 | enabled | Boolean | true | 启用插件 |
+| imeType | String | `rime` | 切换输入法；当前只开放 Rime |
 | weaselServerPath | String | `""` | WeaselServer.exe 自定义路径 |
 | englishColor | String | `#FFFFFF` | 英文模式光标颜色 |
 | chineseColor | String | `#00CC66` | 中文模式光标颜色 |
@@ -28,6 +29,7 @@
 
 - 通过 `contributes.configuration` 注册，路径: `Settings → Extensions → Auto Switch IME`
 - 配置项与 IntelliJ 对齐，前缀 `autoSwitchIME.*`
+- `autoSwitchIME.imeType` 默认 `rime`；可选值只能来自已注册且已实现的 Provider
 - 正则规则字段名: `chineseBeforeRegex` / `chineseAfterRegex` / `capsBeforeRegex` / `capsAfterRegex`
 - 命令面板提供 `Auto Switch IME: 恢复默认设置`，清除本插件配置在用户、工作区和工作区文件夹层级的覆盖值，使其回落到 `package.json` 默认值；不修改其他扩展或编辑器配置。恢复后提示用户重新加载窗口。
 

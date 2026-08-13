@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ImeAction } from '../core/types';
+import { ImeState, InputDisplayMode, inputDisplayModeFor } from '../core/types';
 
 const WORKBENCH = 'workbench';
 const CUSTOMIZATIONS = 'colorCustomizations';
@@ -27,32 +27,33 @@ async function writeColorCustomizations(
 }
 
 export class CaretColorManager implements vscode.Disposable {
-  private currentAction: ImeAction = ImeAction.ENGLISH;
+  private currentMode: InputDisplayMode | null = null;
   private originalCursorColor: string | undefined;
 
   constructor(
-    private chineseColor: string = '#00FF00',
+    private chineseColor: string = '#00CC66',
     private englishColor: string = '#FFFFFF',
-    private capsColor: string = '#FFFF00',
+    private capsColor: string = '#FFCC00',
   ) {
     const all = readColorCustomizations();
     this.originalCursorColor = all[CURSOR_FG] as string | undefined;
   }
 
-  async updateCaretColor(action: ImeAction, force = false): Promise<void> {
-    if (!force && action === this.currentAction) return;
-    this.currentAction = action;
+  async updateCaretColor(state: ImeState): Promise<void> {
+    const mode = inputDisplayModeFor(state);
+    if (mode === this.currentMode) return;
+    this.currentMode = mode;
 
     const all = readColorCustomizations();
-    const color = this.colorFor(action);
+    const color = this.colorFor(mode);
     all[CURSOR_FG] = color;
     all[TERMINAL_CURSOR_FG] = color;
     await writeColorCustomizations(all);
   }
 
   async restoreCaretColor(): Promise<void> {
-    if (this.currentAction === ImeAction.UNCHANGED) return;
-    this.currentAction = ImeAction.UNCHANGED;
+    if (this.currentMode === null) return;
+    this.currentMode = null;
     const all = readColorCustomizations();
     this.restoreOriginalColors(all);
     await writeColorCustomizations(all);
@@ -74,11 +75,11 @@ export class CaretColorManager implements vscode.Disposable {
     }
   }
 
-  private colorFor(action: ImeAction): string {
-    switch (action) {
-      case ImeAction.CHINESE:
+  private colorFor(mode: InputDisplayMode): string {
+    switch (mode) {
+      case InputDisplayMode.CHINESE:
         return this.chineseColor;
-      case ImeAction.CAPS:
+      case InputDisplayMode.CAPS:
         return this.capsColor;
       default:
         return this.englishColor;

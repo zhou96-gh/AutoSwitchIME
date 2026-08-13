@@ -4,15 +4,15 @@ import com.auto_switch_ime.adapter.IntelliJLogger
 import com.auto_switch_ime.caret.CaretColorManager
 import com.auto_switch_ime.core.ImeAction
 import com.auto_switch_ime.core.ImeConfig
+import com.auto_switch_ime.core.ImeProvider
+import com.auto_switch_ime.core.ImeProviderFactory
 import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.ImeType
 import com.auto_switch_ime.core.NormalModePolicy
 import com.auto_switch_ime.core.coordinator.CoordinatorRequest
 import com.auto_switch_ime.core.coordinator.CoordinatorState
-import com.auto_switch_ime.core.ime.ImeStateDetector
 import com.auto_switch_ime.core.ime.NativeImeSys
 import com.auto_switch_ime.core.ime.RimeImeProvider
-import com.auto_switch_ime.core.ime.StateWatcher
 import com.auto_switch_ime.core.ime.WeaselPathDetector
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import com.auto_switch_ime.util.ActionDeduplicator
@@ -64,18 +64,25 @@ class AutoSwitchIMEController : Disposable {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keyEventDispatcher)
     }
 
-    private val providerDelegate = lazy {
-        val config = ImeConfig(type = ImeType.RIME)
-        RimeImeProvider(config, logger).also { imeProvider ->
+    private val providerDelegate = lazy<ImeProvider> {
+        ImeProviderFactory.register(ImeType.RIME) { config, providerLogger ->
+            RimeImeProvider(config, providerLogger)
+        }
+        val settings = AutoSwitchIMESettings.instance
+        val config = ImeConfig(
+            type = ImeType.fromConfig(settings.imeType),
+            weaselServerPath = settings.weaselServerPath.ifBlank { null }
+        )
+        ImeProviderFactory.createProvider(config, logger).also { imeProvider ->
             imeProvider.onStateChanged = ::onPhysicalStateChanged
             imeProvider.start()
         }
     }
-    private val provider: RimeImeProvider by providerDelegate
-
-    val stateWatcher: StateWatcher get() = provider.stateWatcher
+    private val provider: ImeProvider by providerDelegate
 
     fun getTrackedState(): ImeState = provider.getTrackedState()
+
+    fun getCurrentState(): ImeState = provider.getCurrentState()
 
     fun setAsciiMode(ascii: Boolean) {
         runBlocking { provider.setAsciiMode(ascii) }
@@ -169,7 +176,7 @@ class AutoSwitchIMEController : Disposable {
             !it.isDisposed && it.contentComponent.hasFocus()
         } ?: return
 
-        provider.stateWatcher.refresh()
+        provider.refreshState()
         onPhysicalStateChanged(provider.getTrackedState())
     }
 
@@ -221,7 +228,7 @@ class AutoSwitchIMEController : Disposable {
         if (!isCurrent(event)) return
 
         if (!event.normalLike && !provider.getTrackedState().isAsciiMode) {
-            val composing = ImeStateDetector.isComposing(provider.stateWatcher)
+            val composing = runBlocking { provider.isComposing() }
             if (composing) {
                 AutoSwitchIMELogger.debug("${event.source}: Rime is composing, skipping IME switch")
                 updateCaretWhenCurrent(event, provider.getTrackedState())
@@ -255,7 +262,7 @@ class AutoSwitchIMEController : Disposable {
     private fun updateCaretWhenCurrent(event: CoordinatorEvent.EditorContext, state: ImeState) {
         ApplicationManager.getApplication().invokeLater {
             if (isCurrent(event)) {
-                CaretColorManager.updateCaretColor(event.editor, state.isAsciiMode, state.isCapsLock)
+                CaretColorManager.updateCaretColor(event.editor, state)
             }
         }
     }
@@ -279,7 +286,7 @@ class AutoSwitchIMEController : Disposable {
             val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull {
                 !it.isDisposed && it.contentComponent.hasFocus()
             } ?: return@invokeLater
-            CaretColorManager.updateCaretColor(focusedEditor, state.isAsciiMode, state.isCapsLock)
+            CaretColorManager.updateCaretColor(focusedEditor, state)
             if (NormalModePolicy.shouldEnforceEnglish(
                     strictNormalEditors[focusedEditor] == true,
                     state.isAsciiMode,

@@ -11,13 +11,8 @@ ime-sys/ (Rust)
 └── ime-watch: CLI 持续监听
 
 core/ (Kotlin)
-├── ImeProvider 接口
-│   ├── setAsciiMode(ascii: Boolean)
-│   ├── setCapsMode()
-│   ├── releaseOwnedCapsLock()
-│   ├── isComposing(): Boolean
-│   ├── getTrackedState(): ImeState
-│   └── dispose()
+├── ImeProvider 接口: Provider 生命周期、切换和状态读取契约
+├── ImeProviderRegistry: 按 ImeType 注册和创建 Provider
 ├── RimeImeProvider (实现)
 ├── NativeImeSys (JNA → ime_sys.dll)
 └── StateWatcher (WatchService 监听状态文件)
@@ -28,11 +23,18 @@ intellij/ (Kotlin + JNA)
 
 vscode/ (TypeScript + koffi)
 ├── native.ts: koffi → ime_sys.dll（FFI 直接调用）
+├── ImeProviderRegistry.ts: 按 ImeType 注册和创建 Provider
 ├── RimeImeProvider.ts: ImeProvider 实现
 ├── StateWatcher.ts: fs.watchFile 监听状态文件
 ├── ImeCoordinator.ts: Promise mailbox，串行处理全部输入法事件
 └── extension.ts: 插件入口和事件监听器装配
 ```
+
+整体职责固定切分为三部分：
+
+1. 输入监控：编辑器、Vim、焦点、状态文件和物理 CapsLock 监听，只产生上下文或 `ImeState` 事件。
+2. 输入切换处理：Coordinator 串行决策，`ImeProvider` 执行具体输入法切换并返回实际状态。
+3. 光标颜色处理：只把实际 `ImeState` 映射为英文、中文或 CapsLock 颜色，不参与切换决策。
 
 ## 核心链路
 
@@ -43,6 +45,8 @@ Vim/编辑器/焦点/物理状态变化 → Coordinator → RimeImeProvider:
 4. `isComposing()`: 优先 native ime_is_composing(), 失败时 fallback 状态文件
 
 Coordinator 是唯一自动切换入口：事件邮箱严格串行，新编辑上下文会使旧请求失效，失焦和关闭事件会清空待处理上下文并释放插件持有的 CapsLock。Provider 只执行系统操作、读取物理状态和跟踪自身 IME 状态。
+
+Provider 由平台入口注册到 Registry，再按配置中的 `imeType` 创建。当前只注册并开放 Rime，默认值为 `rime`；新增输入法时必须新增独立 Provider 并在两端入口注册，Coordinator 和光标模块不得依赖具体实现。
 
 IntelliJ 和 VSCode 的 UI/监听器入口不得直接调用 Provider；必须向各自 Coordinator 提交事件。同步方法只允许控制器内部或非 UI 诊断路径使用，避免 `WeaselServer.exe` 等外部调用阻塞界面。
 
@@ -58,12 +62,18 @@ CapsLock 有所有权边界：除严格 Normal 模式为保持小写英文而关
 
 ```kotlin
 interface ImeProvider {
+    val type: ImeType
     val name: String
+    var onStateChanged: ((ImeState) -> Unit)?
+    fun start()
     suspend fun setAsciiMode(ascii: Boolean)
+    suspend fun ensureAsciiMode()
     suspend fun setCapsMode()
     suspend fun releaseOwnedCapsLock()
     suspend fun isComposing(): Boolean
     fun getTrackedState(): ImeState
+    fun getCurrentState(): ImeState
+    fun refreshState()
     fun syncTrackedState(ascii: Boolean, caps: Boolean)
     fun dispose()
 }

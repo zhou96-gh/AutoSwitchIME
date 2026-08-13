@@ -83,6 +83,7 @@ function compareVersions(a: string, b: string): number {
 }
 
 export class RimeImeProvider implements ImeProvider {
+  readonly type = ImeType.RIME;
   readonly name = 'Rime/Weasel';
   readonly stateWatcher: StateWatcher;
 
@@ -261,6 +262,15 @@ export class RimeImeProvider implements ImeProvider {
       isCapsLock: nativeCapsRead(),
       isComposing: this.fileIsComposing,
     };
+  }
+
+  getCurrentState(): ImeState {
+    this.stateWatcher.refresh();
+    return this.getTrackedState();
+  }
+
+  refreshState(): void {
+    this.stateWatcher.refresh();
   }
 
   getPhysicalCapsLockState(): boolean {

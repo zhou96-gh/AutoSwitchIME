@@ -105,6 +105,10 @@ export class StateWatcher {
     this.logger.info('StateWatcher stopped');
   }
 
+  refresh(): void {
+    this.readAndApplyState();
+  }
+
   private ensureStateFile(): void {
     try {
       if (!fs.existsSync(this.stateFilePath)) {
