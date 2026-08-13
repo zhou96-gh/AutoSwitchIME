@@ -2,7 +2,7 @@
 
 IntelliJ/VSCode 插件：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。
 
-**当前版本**: v2.2.31
+**当前版本**: v2.3.0
 
 ## 开发环境
 
@@ -27,7 +27,7 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 | UI/光标 | [`agents/ui-caret.md`](agents/ui-caret.md) | 光标颜色管理（IntelliJ+VSCode） |
 | 设置面板 | [`agents/settings.md`](agents/settings.md) | 配置项、正则规则（IntelliJ+VSCode） |
 | 已知问题 | [`agents/issues.md`](agents/issues.md) | 版本日志、待完成、已知 bug |
-| 架构设计 | [`docs/superpowers/specs/2026-07-10-ime-coordinator-actor-design.md`](docs/superpowers/specs/2026-07-10-ime-coordinator-actor-design.md) | 输入法 Coordinator Actor 与多编辑器调度 |
+| 架构设计 | Obsidian `技术/自研规划/AutoSwitchIME/IME Coordinator Actor 架构设计.md` | 输入法 Coordinator Actor 与多编辑器调度；方案设计相关文档统一归档到该子项目分组 |
 
 ## 快速参考
 
@@ -41,6 +41,9 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 
 - 状态真相源必须是物理检测值，不信任软件缓存
 - VSCode 与 IntelliJ 行为一致，差异在 provider 层隔离
+- 整体架构固定分为输入监控、输入切换处理、光标颜色处理三部分；三者只通过 `ImeState` 和 Coordinator 事件协作，不得互相读取平台实现细节
+- 输入法实现通过 `ImeProvider` 和 Provider Registry 扩展；配置项 `imeType` 默认 `rime`，未实现的输入法不得出现在可选列表
+- 光标颜色只绑定当前实际 `ImeState`，不得附加 Vim 模式、规则动作、焦点或其他显示条件
 - 所有原生 Win32 调用集中在 `ime-sys/`
 
 ## 版本与打包

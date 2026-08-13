@@ -2,8 +2,9 @@ package com.auto_switch_ime.caret
 
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.CaretVisualAttributes
-import com.intellij.openapi.editor.ex.EditorEx
-import com.auto_switch_ime.core.ime.NativeImeSys
+import com.auto_switch_ime.core.ImeState
+import com.auto_switch_ime.core.InputDisplayMode
+import com.auto_switch_ime.core.toInputDisplayMode
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import java.awt.Color
 
@@ -13,15 +14,12 @@ object CaretColorManager {
     private val DEFAULT_CHINESE_COLOR = Color(0x00CC66)     // 绿色
     private val DEFAULT_CAPSLOCK_COLOR = Color(0xFFCC00)    // 黄色
 
-    fun updateCaretColor(editor: Editor, isAsciiMode: Boolean, isCapsLock: Boolean) {
+    fun updateCaretColor(editor: Editor, state: ImeState) {
         val settings = AutoSwitchIMESettings.instance
-        if (!settings.enabled) return
-
-        val actualCapsLock = if (NativeImeSys.isAvailable()) NativeImeSys.imeCapsRead() else isCapsLock
-        val color = when {
-            actualCapsLock -> parseColor(settings.capsLockColor, DEFAULT_CAPSLOCK_COLOR)
-            isAsciiMode -> parseColor(settings.englishColor, DEFAULT_ENGLISH_COLOR)
-            else -> parseColor(settings.chineseColor, DEFAULT_CHINESE_COLOR)
+        val color = when (state.toInputDisplayMode()) {
+            InputDisplayMode.ENGLISH -> parseColor(settings.englishColor, DEFAULT_ENGLISH_COLOR)
+            InputDisplayMode.CHINESE -> parseColor(settings.chineseColor, DEFAULT_CHINESE_COLOR)
+            InputDisplayMode.CAPS -> parseColor(settings.capsLockColor, DEFAULT_CAPSLOCK_COLOR)
         }
 
         editor.caretModel.allCarets.forEach { caret ->

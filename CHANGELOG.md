@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.3.0 - 2026-08-13
+
+### 功能
+
+- IntelliJ 和 VSCode 新增“切换输入法”配置，默认使用 Rime；当前只开放已实现的 Rime Provider。
+- 两端新增 Provider Registry 和统一 Provider 契约，为后续接入其他输入法保留扩展入口；无效或未开放的配置值回退到 Rime。
+
+### 调整
+
+- 输入监控、输入切换处理和光标颜色处理按职责拆分，移除 IntelliJ 重复且无消费者的状态监听器。
+- 光标颜色只根据实际 `ImeState` 显示英文、中文或 CapsLock，不再依赖 Vim 模式、规则动作或目标状态。
+- IntelliJ 与 VSCode 的默认光标颜色统一为英文 `#FFFFFF`、中文 `#00CC66`、CapsLock `#FFCC00`。
+- 清理未实现的自定义切换脚本配置和已迁移到 Obsidian 的旧方案文档。
+
 ## 2.2.31 - 2026-08-12
 
 ### 修复

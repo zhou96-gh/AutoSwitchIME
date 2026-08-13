@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ImeAction, ImeState } from '../core/types';
+import { ImeState, InputDisplayMode, inputDisplayModeFor } from '../core/types';
 import { VimMode } from '../core/types';
 
 export class ImeStatusBar implements vscode.Disposable {
@@ -29,25 +29,23 @@ export class ImeStatusBar implements vscode.Disposable {
   }
 
   /** 更新 IME 状态显示 */
-  updateImeState(state: ImeState, action: ImeAction): void {
+  updateImeState(state: ImeState): void {
     let text: string;
     let color: string;
 
-    if (state.isCapsLock) {
-      text = '⬆ CAPS';
-      color = '#FFFF00';
-    } else {
-      switch (action) {
-        case ImeAction.CHINESE:
-          text = '中';
-          color = '#00FF00';
-          break;
-        case ImeAction.ENGLISH:
-        default:
-          text = 'EN';
-          color = '#FFFFFF';
-          break;
-      }
+    switch (inputDisplayModeFor(state)) {
+      case InputDisplayMode.CAPS:
+        text = 'CAPS';
+        color = '#FFCC00';
+        break;
+      case InputDisplayMode.CHINESE:
+        text = '中';
+        color = '#00CC66';
+        break;
+      default:
+        text = 'EN';
+        color = '#FFFFFF';
+        break;
     }
 
     this.imeItem.text = text;

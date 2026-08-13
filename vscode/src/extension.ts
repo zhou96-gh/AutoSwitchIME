@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ImeCoordinator } from './ImeCoordinator';
-import { VSCodeLogger, VimMode } from './core/types';
+import { ImeProvider, ImeType, VSCodeLogger, VimMode } from './core/types';
+import { ImeProviderRegistry } from './providers/ImeProviderRegistry';
 import { RimeImeProvider } from './providers/RimeImeProvider';
 import { VimModeDetector } from './vim/VimModeDetector';
 import { CaretColorManager } from './ui/CaretColor';
@@ -14,7 +15,7 @@ import {
 
 let outputChannel: vscode.OutputChannel;
 let logger: VSCodeLogger;
-let provider: RimeImeProvider;
+let provider: ImeProvider;
 let modeDetector: VimModeDetector;
 let caretColor: CaretColorManager;
 let statusBar: ImeStatusBar | null = null;
@@ -48,12 +49,14 @@ export function activate(context: vscode.ExtensionContext): void {
     return;
   }
 
-  provider = new RimeImeProvider(
-    logger,
-    settings.imeConfig.weaselServerPath,
-    (msg) => vscode.window.showWarningMessage(msg),
-    context.extensionPath,
-  );
+  const providers = new ImeProviderRegistry();
+  providers.register(ImeType.RIME, (config) => new RimeImeProvider(
+      logger,
+      config.weaselServerPath,
+      (msg) => vscode.window.showWarningMessage(msg),
+      context.extensionPath,
+    ));
+  provider = providers.create(settings.imeConfig);
   provider.start();
 
   caretColor = new CaretColorManager(

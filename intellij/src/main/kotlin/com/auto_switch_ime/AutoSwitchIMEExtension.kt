@@ -10,7 +10,6 @@ import com.maddyhome.idea.vim.extension.VimExtension
 import com.maddyhome.idea.vim.newapi.ij
 import com.maddyhome.idea.vim.state.mode.Mode
 import com.auto_switch_ime.caret.CaretColorManager
-import com.auto_switch_ime.core.ime.ImeStateDetector
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import com.auto_switch_ime.util.AutoSwitchIMELogger
@@ -57,13 +56,13 @@ class AutoSwitchIMEExtension : VimExtension, ModeChangeListener {
      */
     private fun initializeImeState() {
         try {
-            val state = ImeStateDetector.getCurrentState(controller.stateWatcher, controller.getTrackedState())
+            val state = controller.getCurrentState()
             AutoSwitchIMELogger.info("Initializing IME state: ascii=${state.isAsciiMode}, caps=${state.isCapsLock}")
 
             val editors = EditorFactory.getInstance().allEditors
             for (editor in editors) {
                 if (!editor.isDisposed) {
-                    CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
+                    CaretColorManager.updateCaretColor(editor, state)
                     val fileName = FileDocumentManager.getInstance().getFile(editor.document)?.name ?: "(unnamed)"
                     AutoSwitchIMELogger.debug("Initialized caret color for editor: $fileName")
                 }

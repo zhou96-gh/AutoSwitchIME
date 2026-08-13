@@ -10,7 +10,7 @@ import com.intellij.ui.ColorPanel
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.xmlb.XmlSerializerUtil
-import com.auto_switch_ime.core.ime.ImeStateDetector
+import com.auto_switch_ime.core.ImeType
 import com.auto_switch_ime.core.ime.WeaselPathDetector
 import com.auto_switch_ime.util.AutoSwitchIMELogger
 import org.jetbrains.annotations.Nls
@@ -21,6 +21,7 @@ import java.io.File
 import java.util.regex.Pattern
 import javax.swing.JButton
 import javax.swing.JCheckBox
+import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JSeparator
@@ -33,6 +34,7 @@ import javax.swing.JTextArea
 class AutoSwitchIMESettings : PersistentStateComponent<AutoSwitchIMESettings> {
 
     var enabled: Boolean = true
+    var imeType: String = ImeType.RIME.configValue
     var weaselServerPath: String = ""
     var englishColor: String = "#FFFFFF"
     var chineseColor: String = "#00CC66"
@@ -68,6 +70,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
 
     private var settingsPanel: JPanel? = null
     private var enabledCheckBox: JCheckBox? = null
+    private var imeTypeComboBox: JComboBox<ImeType>? = null
     private var pathField: JBTextField? = null
     private var englishColorPanel: ColorPanel? = null
     private var chineseColorPanel: ColorPanel? = null
@@ -104,80 +107,86 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2
         settingsPanel!!.add(enabledCheckBox, gbc)
 
-        // WeaselServer 路径
         gbc.gridy = 1; gbc.gridwidth = 1
+        settingsPanel!!.add(JBLabel("切换输入法:"), gbc)
+        imeTypeComboBox = JComboBox(ImeType.availableTypes().toTypedArray())
+        gbc.gridx = 1; gbc.weightx = 1.0
+        settingsPanel!!.add(imeTypeComboBox, gbc)
+
+        // WeaselServer 路径
+        gbc.gridy = 2; gbc.gridx = 0; gbc.gridwidth = 1
         settingsPanel!!.add(JBLabel("WeaselServer.exe 路径:"), gbc)
         pathField = JBTextField()
         gbc.gridx = 1; gbc.weightx = 1.0
         settingsPanel!!.add(pathField, gbc)
 
         // 颜色选择
-        gbc.gridy = 2; gbc.gridx = 0; gbc.gridwidth = 1; gbc.weightx = 0.0
+        gbc.gridy = 3; gbc.gridx = 0; gbc.gridwidth = 1; gbc.weightx = 0.0
         settingsPanel!!.add(JBLabel("英文模式颜色:"), gbc)
         englishColorPanel = ColorPanel()
         gbc.gridx = 1
         settingsPanel!!.add(englishColorPanel, gbc)
 
-        gbc.gridy = 3; gbc.gridx = 0
+        gbc.gridy = 4; gbc.gridx = 0
         settingsPanel!!.add(JBLabel("中文模式颜色:"), gbc)
         chineseColorPanel = ColorPanel()
         gbc.gridx = 1
         settingsPanel!!.add(chineseColorPanel, gbc)
 
-        gbc.gridy = 4; gbc.gridx = 0
+        gbc.gridy = 5; gbc.gridx = 0
         settingsPanel!!.add(JBLabel("CapsLock 颜色:"), gbc)
         capsLockColorPanel = ColorPanel()
         gbc.gridx = 1
         settingsPanel!!.add(capsLockColorPanel, gbc)
 
         // 分隔线
-        gbc.gridy = 5; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 6; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(JSeparator(), gbc)
 
         // Insert 模式自动切换规则标题
-        gbc.gridy = 6; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 7; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("Insert 模式自动切换规则（正则表达式）:"), gbc)
 
         // 中文规则 - 光标前
-        gbc.gridy = 7; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 8; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("中文规则 (光标前):"), gbc)
         insertModeChineseBeforeRegexField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0
         settingsPanel!!.add(insertModeChineseBeforeRegexField, gbc)
 
         // 中文规则 - 光标后
-        gbc.gridy = 8; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 9; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("中文规则 (光标后):"), gbc)
         insertModeChineseAfterRegexField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(insertModeChineseAfterRegexField, gbc)
 
         // 大写规则 - 光标前
-        gbc.gridy = 9; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 10; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("大写规则 (光标前):"), gbc)
         insertModeCapsBeforeRegexField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(insertModeCapsBeforeRegexField, gbc)
 
         // 大写规则 - 光标后
-        gbc.gridy = 10; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 11; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("大写规则 (光标后):"), gbc)
         insertModeCapsAfterRegexField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(insertModeCapsAfterRegexField, gbc)
 
         // 分隔线
-        gbc.gridy = 11; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 12; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(JSeparator(), gbc)
 
         // 日志开关
-        gbc.gridy = 12; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 13; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("日志输出开关:"), gbc)
         
-        gbc.gridy = 13; gbc.gridx = 0; gbc.gridwidth = 1
+        gbc.gridy = 14; gbc.gridx = 0; gbc.gridwidth = 1
         logErrorCheckBox = JCheckBox("错误 (ERROR)")
         settingsPanel!!.add(logErrorCheckBox, gbc)
         
@@ -185,7 +194,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         logWarnCheckBox = JCheckBox("警告 (WARN)")
         settingsPanel!!.add(logWarnCheckBox, gbc)
         
-        gbc.gridy = 14; gbc.gridx = 0
+        gbc.gridy = 15; gbc.gridx = 0
         logInfoCheckBox = JCheckBox("信息 (INFO)")
         settingsPanel!!.add(logInfoCheckBox, gbc)
         
@@ -194,21 +203,21 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         settingsPanel!!.add(logDebugCheckBox, gbc)
 
         restoreDefaultsButton = JButton("恢复默认设置")
-        gbc.gridy = 15; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 16; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(restoreDefaultsButton, gbc)
 
         // 分隔线
-        gbc.gridy = 16; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 17; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(JSeparator(), gbc)
 
         // 调试区域标题
-        gbc.gridy = 17; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 18; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("调试工具:"), gbc)
 
         // 配置检测按钮
-        gbc.gridy = 18; gbc.gridx = 0; gbc.gridwidth = 1
+        gbc.gridy = 19; gbc.gridx = 0; gbc.gridwidth = 1
         testConfigButton = JButton("检测配置状态")
         settingsPanel!!.add(testConfigButton, gbc)
 
@@ -217,27 +226,27 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         configStatusArea!!.isEditable = false
         configStatusArea!!.lineWrap = true
         configStatusArea!!.wrapStyleWord = true
-        gbc.gridy = 19; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
+        gbc.gridy = 20; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(configStatusArea, gbc)
 
         // 正则测试区域
-        gbc.gridy = 20; gbc.gridx = 0; gbc.gridwidth = 2
+        gbc.gridy = 21; gbc.gridx = 0; gbc.gridwidth = 2
         gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("正则规则测试 (分别输入光标前/后文本):"), gbc)
 
-        gbc.gridy = 21; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 22; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("光标前:"), gbc)
         regexBeforeField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0
         settingsPanel!!.add(regexBeforeField, gbc)
 
-        gbc.gridy = 22; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 23; gbc.gridx = 0; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE
         settingsPanel!!.add(JBLabel("光标后:"), gbc)
         regexAfterField = JBTextField()
         gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(regexAfterField, gbc)
 
-        gbc.gridy = 23; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
+        gbc.gridy = 24; gbc.gridx = 0; gbc.fill = GridBagConstraints.NONE
         regexTestButton = JButton("测试匹配")
         settingsPanel!!.add(regexTestButton, gbc)
 
@@ -246,7 +255,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         regexResultArea!!.isEditable = false
         regexResultArea!!.lineWrap = true
         regexResultArea!!.wrapStyleWord = true
-        gbc.gridy = 24; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
+        gbc.gridy = 25; gbc.gridx = 0; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL
         settingsPanel!!.add(regexResultArea, gbc)
 
         // 使用 BorderLayout 包装，消除顶部空白
@@ -272,6 +281,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
     override fun isModified(): Boolean {
         val settings = AutoSwitchIMESettings.instance
         return enabledCheckBox?.isSelected != settings.enabled ||
+                (imeTypeComboBox?.selectedItem as? ImeType)?.configValue != settings.imeType ||
                 pathField?.text != settings.weaselServerPath ||
                 englishColorPanel?.selectedColor?.let { toHex(it) } != settings.englishColor ||
                 chineseColorPanel?.selectedColor?.let { toHex(it) } != settings.chineseColor ||
@@ -289,6 +299,8 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
     override fun apply() {
         val settings = AutoSwitchIMESettings.instance
         settings.enabled = enabledCheckBox?.isSelected ?: true
+        settings.imeType = (imeTypeComboBox?.selectedItem as? ImeType)?.configValue
+            ?: ImeType.RIME.configValue
         
         // 验证 WeaselServer 路径
         val pathText = pathField?.text?.trim() ?: ""
@@ -325,6 +337,8 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
 
     private fun populateForm(settings: AutoSwitchIMESettings) {
         enabledCheckBox?.isSelected = settings.enabled
+        imeTypeComboBox?.selectedItem = ImeType.fromConfig(settings.imeType).takeIf(ImeType::available)
+            ?: ImeType.RIME
         pathField?.text = settings.weaselServerPath
         englishColorPanel?.selectedColor = decodeColor(settings.englishColor)
         chineseColorPanel?.selectedColor = decodeColor(settings.chineseColor)
@@ -367,6 +381,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
 
         // 1. 插件启用状态
         sb.append("插件启用: ${if (settings.enabled) "是" else "否"}\n")
+        sb.append("切换输入法: ${ImeType.fromConfig(settings.imeType).displayName}\n")
 
         // 2. WeaselServer 路径
         val pathText = pathField?.text?.trim() ?: ""
@@ -391,11 +406,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         // 3. IME 当前状态
         try {
             val controller = ApplicationManager.getApplication().getService(com.auto_switch_ime.ime.AutoSwitchIMEController::class.java)
-            val imeState = if (controller != null) {
-                ImeStateDetector.getCurrentState(controller.stateWatcher, controller.getTrackedState())
-            } else {
-                com.auto_switch_ime.core.ImeState(true, false)
-            }
+            val imeState = controller?.getCurrentState() ?: com.auto_switch_ime.core.ImeState(true, false)
             sb.append("当前 IME 状态: ${if (imeState.isAsciiMode) "英文(ASCII)" else "中文"}, CapsLock: ${if (imeState.isCapsLock) "开" else "关"}\n")
         } catch (e: Exception) {
             sb.append("IME 状态检测失败: ${e.message}\n")

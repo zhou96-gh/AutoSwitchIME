@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { ImeConfig, ImeType } from './core/types';
+import { availableImeTypeFor, ImeConfig, ImeType } from './core/types';
 import { RuleSet } from './core/RuleEvaluator';
 
 const CONFIG_SECTION = 'autoSwitchIME';
@@ -12,7 +12,6 @@ const CONFIG_KEYS = [
   'enabled',
   'imeType',
   'weaselServerPath',
-  'customSwitchScript',
   'chineseBeforeRegex',
   'chineseAfterRegex',
   'capsBeforeRegex',
@@ -42,14 +41,11 @@ export interface PluginSettings {
 export function getSettings(): PluginSettings {
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 
-  const imeTypeStr = config.get<string>('imeType', 'rime');
-
   return {
     enabled: config.get<boolean>('enabled', true),
     imeConfig: {
-      type: mapImeType(imeTypeStr),
+      type: availableImeTypeFor(config.get<string>('imeType', ImeType.RIME)),
       weaselServerPath: config.get<string>('weaselServerPath') || undefined,
-      customSwitchScript: config.get<string>('customSwitchScript') || undefined,
     },
     rules: {
       chineseBeforeRegex: config.get<string>('chineseBeforeRegex', ''),
@@ -58,26 +54,11 @@ export function getSettings(): PluginSettings {
       capsAfterRegex: config.get<string>('capsAfterRegex', ''),
     },
     caretDebounceMs: config.get<number>('caretDebounceMs', 50),
-    chineseCaretColor: config.get<string>('chineseCaretColor', '#00FF00'),
+    chineseCaretColor: config.get<string>('chineseCaretColor', '#00CC66'),
     englishCaretColor: config.get<string>('englishCaretColor', '#FFFFFF'),
-    capsCaretColor: config.get<string>('capsCaretColor', '#FFFF00'),
+    capsCaretColor: config.get<string>('capsCaretColor', '#FFCC00'),
     showStatusBar: config.get<boolean>('showStatusBarIndicator', true),
   };
-}
-
-function mapImeType(str: string): ImeType {
-  switch (str) {
-    case 'rime':
-      return ImeType.RIME;
-    case 'sogou':
-      return ImeType.SOGOU;
-    case 'ms_pinyin':
-      return ImeType.MS_PINYIN;
-    case 'custom':
-      return ImeType.CUSTOM;
-    default:
-      return ImeType.RIME;
-  }
 }
 
 /**

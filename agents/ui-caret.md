@@ -5,8 +5,7 @@
 ### API
 ```kotlin
 object CaretColorManager {
-    fun updateCaretColor(editor: Editor, isAsciiMode: Boolean, isCapsLock: Boolean)
-    fun updateAllCaretColors(isAsciiMode: Boolean, isCapsLock: Boolean)
+    fun updateCaretColor(editor: Editor, state: ImeState)
 }
 ```
 
@@ -26,25 +25,25 @@ object CaretColorManager {
 - 编辑器创建时初始化
 - `ImeStateDetector.getCurrentState()` 检测到手动 IME 切换时更新
 - IntelliJ 编辑器聚焦期间任意按键释放后必须主动读取物理 CapsLock 并刷新颜色；该刷新不得受 Vim 模式限制。
-- **光标颜色必须跟随输入法规则产生的目标状态**：先按 Vim 模式/正则规则决定并执行输入法动作，再用同一个目标状态更新颜色；不能为了修颜色伪造独立的 IME 状态。
+- 光标模块只能接收监控或 Provider 返回的实际 `ImeState`，不能接收规则产生的目标动作，也不能为了修颜色伪造状态。
 - 选色前必须用物理 CapsLock 读数覆盖传入状态，不能信任状态文件中的 `caps_lock`。
-- 插件启用期间，光标颜色只读取当前实际英文、中文或 CapsLock 状态，不得读取或判断 Vim 模式；IdeaVim 只管理光标形状、粗细和厚度。
+- 光标颜色直接绑定当前实际英文、中文或 CapsLock 状态，不得读取或判断 Vim 模式、规则动作、焦点或启用状态；IdeaVim 只管理光标形状、粗细和厚度。
 
 ## VSCode — CaretColor.ts
 
 ### API
 ```typescript
-async updateCaretColor(action: ImeAction): Promise<void>
+async updateCaretColor(state: ImeState): Promise<void>
 ```
 
 ### 实现
 通过 `vscode.workspace.getConfiguration().update('workbench.colorCustomizations.editorCursor.foreground', color)` 修改光标颜色。
 dispose 时恢复原始颜色。
-光标颜色刷新只读取当前实际输入状态，不得读取或判断 Vim 模式；Normal、Visual、Insert、Command 等模式只影响输入法切换策略。
+光标颜色刷新只读取当前实际输入状态，不得读取或判断 Vim 模式、规则动作、焦点或启用状态；Normal、Visual、Insert、Command 等模式只影响输入法切换策略。
 
 ### `isCapsLock` 直接来自即时物理读（`nativeCapsRead()`），
 无软件镜像状态，`getTrackedState().isCapsLock === actual physical value`。
-`applyColorAndStatus()` 更新状态栏和光标颜色前也必须用物理读数覆盖传入 state。
+Coordinator 更新状态栏和光标颜色前也必须使用 Provider 产出的实际 state。
 
 ## 文件
 

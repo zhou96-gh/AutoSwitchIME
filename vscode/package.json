@@ -2,7 +2,7 @@
   "name": "auto-switch-ime",
   "displayName": "Auto Switch IME",
   "description": "Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示",
-  "version": "2.2.31",
+  "version": "2.3.0",
   "publisher": "auto-switch-ime",
   "license": "MIT",
   "repository": {
@@ -45,22 +45,17 @@
           "type": "string",
           "default": "rime",
           "enum": [
-            "rime",
-            "sogou",
-            "ms_pinyin",
-            "custom"
+            "rime"
           ],
-          "description": "输入法类型"
+          "enumDescriptions": [
+            "Rime / 小狼毫"
+          ],
+          "description": "切换输入法"
         },
         "autoSwitchIME.weaselServerPath": {
           "type": "string",
           "default": "",
           "description": "WeaselServer.exe 路径（留空自动检测）"
-        },
-        "autoSwitchIME.customSwitchScript": {
-          "type": "string",
-          "default": "",
-          "description": "自定义切换脚本路径（仅 custom 类型）"
         },
         "autoSwitchIME.chineseBeforeRegex": {
           "type": "string",
@@ -89,7 +84,7 @@
         },
         "autoSwitchIME.chineseCaretColor": {
           "type": "string",
-          "default": "#00FF00",
+          "default": "#00CC66",
           "description": "中文模式光标颜色"
         },
         "autoSwitchIME.englishCaretColor": {
@@ -99,7 +94,7 @@
         },
         "autoSwitchIME.capsCaretColor": {
           "type": "string",
-          "default": "#FFFF00",
+          "default": "#FFCC00",
           "description": "大写模式光标颜色"
         },
         "autoSwitchIME.showStatusBarIndicator": {

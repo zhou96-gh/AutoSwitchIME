@@ -16,10 +16,8 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.util.Alarm
 import com.auto_switch_ime.caret.CaretColorManager
-import com.auto_switch_ime.core.ime.ImeStateDetector
 import com.auto_switch_ime.core.ime.NativeImeSys
 import com.auto_switch_ime.ime.AutoSwitchIMEController
-import com.auto_switch_ime.ime.AutoSwitchIMEStateWatcher
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import com.auto_switch_ime.util.AutoSwitchIMELogger
 import java.awt.event.FocusAdapter
@@ -38,7 +36,6 @@ class AutoSwitchIMEPlugin : ProjectActivity {
 
     // Cached service references – avoid getService() reflection lookup on every call
     private var cachedController: AutoSwitchIMEController? = null
-    private var cachedStateWatcher: AutoSwitchIMEStateWatcher? = null
 
     // Debounce alarm for caretPositionChanged – coalesce rapid h/j/k/l key repeats
     // 独立 Disposable 做 parent：不注册到 project，避免 Project 关闭时 Alarm 同步 dispose 导致 "Already disposed"
@@ -63,11 +60,6 @@ class AutoSwitchIMEPlugin : ProjectActivity {
 
             // 初始化防抖 Alarm（独立 parent disposable，确保 Alarm 在 Project 关闭期间仍可用）
             caretDebounceAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, alarmParentDisposable)
-
-            // 启动 Rime 状态文件监听器（通过 Service 获取并缓存）
-            cachedStateWatcher = ApplicationManager.getApplication().getService(AutoSwitchIMEStateWatcher::class.java)
-            cachedStateWatcher?.start()
-            AutoSwitchIMELogger.info("AutoSwitchIMEStateWatcher started for manual IME switching detection")
 
             val ctrl = ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
             cachedController = ctrl
@@ -191,18 +183,14 @@ class AutoSwitchIMEPlugin : ProjectActivity {
         ApplicationManager.getApplication().invokeLater {
             try {
                 val ctrl = ApplicationManager.getApplication().getService(AutoSwitchIMEController::class.java)
-                val state = if (ctrl != null) {
-                    ImeStateDetector.getCurrentState(ctrl.stateWatcher, ctrl.getTrackedState())
-                } else {
-                    com.auto_switch_ime.core.ImeState(true, false)
-                }
+                val state = ctrl?.getCurrentState() ?: com.auto_switch_ime.core.ImeState(true, false)
                 AutoSwitchIMELogger.info("Initializing IME state: ascii=${state.isAsciiMode}, caps=${state.isCapsLock}")
 
                 // 更新所有已打开编辑器的光标颜色
                 val editors = EditorFactory.getInstance().allEditors
                 for (editor in editors) {
                     if (!editor.isDisposed) {
-                        CaretColorManager.updateCaretColor(editor, state.isAsciiMode, state.isCapsLock)
+                        CaretColorManager.updateCaretColor(editor, state)
                         if (com.auto_switch_ime.util.VimModeChecker.isNormalLikeMode(editor)) {
                             if (editor.contentComponent.hasFocus()) {
                                 ctrl?.requestEditorUpdate(editor, "AutoSwitchIMEPluginInit")

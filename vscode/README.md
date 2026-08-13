@@ -7,7 +7,8 @@
 - 进入 Normal、Visual、Command 等 normal-like 模式时默认切换英文，之后仍允许手动切换。
 - Insert 模式根据光标两侧内容自动选择中文、大写或英文。
 - 所有匹配忽略数字和空格；同时命中左右上下文时优先左侧。
-- normal-like 模式恢复 VSCode 原生光标颜色，Insert 模式用颜色显示输入法状态。
+- 所有 Vim 模式都用光标颜色显示当前实际输入状态，颜色不依赖 Vim 模式或切换规则。
+- 设置中的“切换输入法”默认 Rime；当前版本只开放 Rime Provider。
 - 切换前校验 VSCode 焦点和 Windows 前台窗口，避免影响外部程序。
 - 命令面板提供 `Auto Switch IME: 恢复默认设置`。
 

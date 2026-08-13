@@ -10,6 +10,7 @@ class RimeImeProvider(
     private val logger: Logger
 ) : ImeProvider {
 
+    override val type: ImeType = ImeType.RIME
     override val name: String = "Rime/Weasel"
 
     @Volatile
@@ -21,7 +22,7 @@ class RimeImeProvider(
     private val switchLock = Any()
 
     /** 状态文件变化回调 */
-    var onStateChanged: ((ImeState) -> Unit)? = null
+    override var onStateChanged: ((ImeState) -> Unit)? = null
 
     val stateWatcher: StateWatcher
     private val weaselServerPath: String?
@@ -35,7 +36,7 @@ class RimeImeProvider(
         )
     }
 
-    fun start() {
+    override fun start() {
         stateWatcher.start()
     }
 
@@ -43,14 +44,10 @@ class RimeImeProvider(
         stateWatcher.stop()
     }
 
-    override suspend fun setAsciiMode(ascii: Boolean) {
-        setAsciiMode(ascii, { true })
-    }
-
-    suspend fun setAsciiMode(
+    override suspend fun setAsciiMode(
         ascii: Boolean,
         shouldContinue: () -> Boolean,
-        forceLowercase: Boolean = false
+        forceLowercase: Boolean
     ) {
         synchronized(switchLock) {
             if (!shouldContinue()) return
@@ -84,11 +81,26 @@ class RimeImeProvider(
         }
     }
 
-    override suspend fun setCapsMode() {
-        setCapsMode { true }
+    override suspend fun ensureAsciiMode(shouldContinue: () -> Boolean) {
+        synchronized(switchLock) {
+            if (!shouldContinue()) return
+            stateWatcher.isForcingImeSwitch = true
+            try {
+                if (!currentAsciiMode) {
+                    if (!shouldContinue()) return
+                    currentAsciiMode = true
+                    switchImeMode("/ascii", "ASCII", shouldContinue)
+                }
+                onStateChanged?.invoke(
+                    ImeState(currentAsciiMode, NativeImeSys.imeCapsRead(), stateWatcher.isComposing)
+                )
+            } finally {
+                stateWatcher.isForcingImeSwitch = false
+            }
+        }
     }
 
-    suspend fun setCapsMode(shouldContinue: () -> Boolean) {
+    override suspend fun setCapsMode(shouldContinue: () -> Boolean) {
         synchronized(switchLock) {
             if (!shouldContinue()) return
             stateWatcher.isForcingImeSwitch = true
@@ -139,6 +151,14 @@ class RimeImeProvider(
 
     override fun getTrackedState(): ImeState {
         return ImeState(currentAsciiMode, NativeImeSys.imeCapsRead())
+    }
+
+    override fun getCurrentState(): ImeState {
+        return ImeStateDetector.getCurrentState(stateWatcher, getTrackedState())
+    }
+
+    override fun refreshState() {
+        stateWatcher.refresh()
     }
 
     override fun syncTrackedState(ascii: Boolean, caps: Boolean) {

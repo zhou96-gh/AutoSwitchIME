@@ -91,13 +91,14 @@ Insert 模式的中文和大写正则可分别配置光标前、光标后规则�
 | 配置 | IntelliJ | VSCode |
 | --- | --- | --- |
 | 启用插件 | `enabled` | `autoSwitchIME.enabled` |
+| 切换输入法（默认 Rime） | `imeType` | `autoSwitchIME.imeType` |
 | WeaselServer 路径 | `weaselServerPath` | `autoSwitchIME.weaselServerPath` |
 | 光标前中文规则 | `insertModeChineseBeforeRegex` | `autoSwitchIME.chineseBeforeRegex` |
 | 光标后中文规则 | `insertModeChineseAfterRegex` | `autoSwitchIME.chineseAfterRegex` |
 | 光标前大写规则 | `insertModeCapsBeforeRegex` | `autoSwitchIME.capsBeforeRegex` |
 | 光标后大写规则 | `insertModeCapsAfterRegex` | `autoSwitchIME.capsAfterRegex` |
 
-`WeaselServer.exe` 默认从注册表和常见安装目录自动检测；自动检测失败时再手动填写完整路径。
+当前“切换输入法”只开放 Rime，架构通过 Provider Registry 预留其他输入法实现入口。`WeaselServer.exe` 默认从注册表和常见安装目录自动检测；自动检测失败时再手动填写完整路径。
 
 恢复全部默认配置：
 
