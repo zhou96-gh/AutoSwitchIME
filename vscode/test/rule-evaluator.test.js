@@ -92,6 +92,13 @@ test('ignores only hyphens and underscores when matching caps context', () => {
   assert.equal(evaluateRules('HTTP_-', '', defaultRules), ImeAction.CAPS);
 });
 
+test('ignores internal underscore when matching caps before caret', () => {
+  assert.equal(
+    evaluateRules('AA_A', 'AA', { ...defaultRules, capsAfterRegex: '^[A-Z]{2,}.*' }),
+    ImeAction.CAPS,
+  );
+});
+
 test('returns english when rules are blank or invalid', () => {
   assert.equal(
     evaluateRules(

@@ -1,5 +1,7 @@
 local M = {}
 
+local PROTOCOL_VERSION = 2
+
 local function log_info(msg)
     if log and log.info then
         log.info("[auto_switch_ime_bridge] " .. msg)
@@ -12,41 +14,77 @@ local function log_warn(msg)
     end
 end
 
-local function write_state(env, ascii_mode, is_composing)
-    if ascii_mode == env.last_ascii_mode and is_composing == env.last_is_composing then
-        return
+local function json_escape(value)
+    return tostring(value)
+        :gsub("\\", "\\\\")
+        :gsub('"', '\\"')
+        :gsub("\r", "\\r")
+        :gsub("\n", "\\n")
+end
+
+local function write_json_file(state_file, json)
+    local tmp_file = state_file .. ".tmp"
+    local file = io.open(tmp_file, "w")
+    if not file then
+        log_warn("Failed to open temporary file for writing: " .. tmp_file)
+        return false
     end
 
+    file:write(json)
+    file:close()
+    os.remove(state_file)
+    if not os.rename(tmp_file, state_file) then
+        log_warn("Failed to replace state file: " .. state_file)
+        return false
+    end
+    return true
+end
+
+local function state_file_has_session(state_file, session_token)
+    local file = io.open(state_file, "r")
+    if not file then
+        return false
+    end
+
+    local content = file:read("*a")
+    file:close()
+    local written_token = content:match('"session_token"%s*:%s*"([^"]+)"')
+    return written_token == session_token
+end
+
+local function write_state(env, ascii_mode, is_composing)
     local temp_dir = os.getenv("TEMP")
     if not temp_dir then
         log_warn("TEMP environment variable not set")
         return
     end
 
-    local state_file = temp_dir .. "\\ime-state-rime.json"
-    local tmp_file = state_file .. ".tmp"
+    local state_file = temp_dir .. "\\ime-state-rime-v2.json"
+    if state_file_has_session(state_file, env.session_token)
+        and ascii_mode == env.last_ascii_mode
+        and is_composing == env.last_is_composing
+    then
+        return
+    end
 
     log_info("Writing state: ascii=" .. tostring(ascii_mode) .. ", composing=" .. tostring(is_composing))
 
+    local sequence = env.sequence + 1
     local json = string.format(
-        '{"ascii_mode": %s, "caps_lock": false, "is_composing": %s, "timestamp": %d}',
+        '{"protocol_version": %d, "provider": "rime", "session_token": "%s", "sequence": %d, "ascii_mode": %s, "caps_lock": false, "is_composing": %s, "timestamp": %d}',
+        PROTOCOL_VERSION,
+        json_escape(env.session_token),
+        sequence,
         ascii_mode and "true" or "false",
         is_composing and "true" or "false",
         os.time()
     )
 
-    local file = io.open(tmp_file, "w")
-    if file then
-        file:write(json)
-        file:close()
-        os.remove(state_file)
-        os.rename(tmp_file, state_file)
-
+    if write_json_file(state_file, json) then
         env.last_ascii_mode = ascii_mode
         env.last_is_composing = is_composing
+        env.sequence = sequence
         log_info("State file written successfully (atomic)")
-    else
-        log_warn("Failed to open temporary file for writing: " .. tmp_file)
     end
 end
 
@@ -55,6 +93,10 @@ function M.init(env)
 
     env.last_ascii_mode = nil
     env.last_is_composing = nil
+    env.sequence = 0
+    local session_identity = table.concat({ tostring(env), tostring(env.engine), tostring(env.engine.context) }, "-")
+    env.session_token = string.format("%d-%s", os.time(), session_identity:gsub("[^%w%-_.]", ""))
+    log_info("Rime session observer token=" .. env.session_token)
 
     env.option_conn = env.engine.context.option_update_notifier:connect(
         function(ctx, name)

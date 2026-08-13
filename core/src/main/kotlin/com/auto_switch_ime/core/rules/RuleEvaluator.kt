@@ -12,8 +12,7 @@ object RuleEvaluator {
     private val patternCache = mutableMapOf<String, Pattern>()
     private val trailingPunctuationSymbolsNumbersOrSpaces = Pattern.compile("[\\p{P}\\p{S}\\p{N}\\s]+$")
     private val leadingPunctuationSymbolsNumbersOrSpaces = Pattern.compile("^[\\p{P}\\p{S}\\p{N}\\s]+")
-    private val trailingCapsSeparators = Pattern.compile("[-_\\p{N}\\s]+$")
-    private val leadingCapsSeparators = Pattern.compile("^[-_\\p{N}\\s]+")
+    private val capsSeparators = Pattern.compile("[-_]")
     private val trailingNeutralCharacters = Pattern.compile("[\\p{N}\\s]+$")
     private val leadingNeutralCharacters = Pattern.compile("^[\\p{N}\\s]+")
     private val trailingEnglishCharacter = Pattern.compile("[\\x21-\\x7E]$")
@@ -43,8 +42,8 @@ object RuleEvaluator {
     ): ImeAction {
         val chineseBefore = trailingPunctuationSymbolsNumbersOrSpaces.matcher(before).replaceFirst("")
         val chineseAfter = leadingPunctuationSymbolsNumbersOrSpaces.matcher(after).replaceFirst("")
-        val capsBefore = trailingCapsSeparators.matcher(before).replaceFirst("")
-        val capsAfter = leadingCapsSeparators.matcher(after).replaceFirst("")
+        val capsBefore = capsSeparators.matcher(trailingNeutralCharacters.matcher(before).replaceFirst("")).replaceAll("")
+        val capsAfter = capsSeparators.matcher(leadingNeutralCharacters.matcher(after).replaceFirst("")).replaceAll("")
         val englishBefore = trailingNeutralCharacters.matcher(before).replaceFirst("")
         val englishAfter = leadingNeutralCharacters.matcher(after).replaceFirst("")
 

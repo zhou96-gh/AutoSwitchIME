@@ -2,6 +2,13 @@ package com.auto_switch_ime.core.ime
 
 import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.util.Logger
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import java.io.File
 import java.nio.file.FileSystems
 import java.nio.file.StandardWatchEventKinds
@@ -12,11 +19,12 @@ import java.util.concurrent.TimeUnit
  * 监听 Rime Lua 脚本写入的状态文件变化
  * 平台无关，通过回调通知状态变化
  */
-class StateWatcher(
+class RimeStateWatcher(
     private val stateFilePath: String,
     private val logger: Logger,
     private val onStateChanged: (ImeState) -> Unit
 ) {
+    private val sessionTracker = RimeSessionTracker()
     private var watcherThread: Thread? = null
     private var isRunning = false
 
@@ -76,13 +84,6 @@ class StateWatcher(
             var shouldRestart = false
             var watchService: java.nio.file.WatchService? = null
             try {
-                // 确保状态文件存在
-                if (!stateFile.exists()) {
-                    stateFile.parentFile?.mkdirs()
-                    stateFile.createNewFile()
-                    logger.debug("Created initial state file: $stateFilePath")
-                }
-
                 val parentDir = stateFile.parentFile.toPath()
                 val service = FileSystems.getDefault().newWatchService()
                 watchService = service
@@ -106,7 +107,7 @@ class StateWatcher(
 
                     for (event in watchKey.pollEvents()) {
                         val context = event.context()?.toString() ?: continue
-                        if (context.contains("ime-state") || context == fileName) {
+                        if (context == fileName) {
                             readAndApplyState()
                             break
                         }
@@ -158,13 +159,9 @@ class StateWatcher(
         }
 
         try {
-            val stateFile = File(stateFilePath)
-            if (!stateFile.exists()) return
-
-            val content = stateFile.readText(Charsets.UTF_8).trim()
-            if (content.isEmpty()) return
-
-            val state = parseImeStateJson(content) ?: return
+            val update = readStateFile(stateFilePath) ?: return
+            if (!sessionTracker.accept(update)) return
+            val state = update.state
 
             // 检测状态是否发生变化
             if (state.isAsciiMode != lastAsciiMode || state.isCapsLock != lastCapsLock || state.isComposing != isComposing) {
@@ -184,22 +181,55 @@ class StateWatcher(
         }
     }
 
+    private fun readStateFile(path: String): RimeSessionState? {
+        val stateFile = File(path)
+        if (!stateFile.exists()) return null
+
+        val content = stateFile.readText(Charsets.UTF_8).trim()
+        if (content.isEmpty()) return null
+        return parseRimeSessionStateJson(content)
+    }
+
 }
 
-internal fun parseImeStateJson(json: String): ImeState? {
-    return try {
-        val asciiMode = extractBoolean(json, "ascii_mode") ?: return null
-        val capsLock = extractBoolean(json, "caps_lock") ?: false
-        val isComposing = extractBoolean(json, "is_composing") ?: false
-        ImeState(asciiMode, capsLock, isComposing)
-    } catch (e: Exception) {
-        null
+internal data class RimeSessionState(
+    val state: ImeState,
+    val sessionToken: String,
+    val sequence: Long
+)
+
+internal class RimeSessionTracker {
+    private var currentSessionToken: String? = null
+    private var lastSequence: Long = 0
+
+    fun accept(update: RimeSessionState): Boolean {
+        if (update.sessionToken == currentSessionToken && update.sequence <= lastSequence) return false
+
+        currentSessionToken = update.sessionToken
+        lastSequence = update.sequence
+        return true
     }
 }
 
-private fun extractBoolean(json: String, key: String): Boolean? {
-    val pattern = """"$key"\s*:\s*(true|false)"""
-    val regex = Regex(pattern)
-    val match = regex.find(json) ?: return null
-    return match.groupValues[1].toBoolean()
+internal fun parseRimeSessionStateJson(json: String): RimeSessionState? {
+    return try {
+        val root = Json.parseToJsonElement(json).jsonObject
+        if (root["protocol_version"]?.jsonPrimitive?.intOrNull != 2) return null
+        if (root["provider"]?.jsonPrimitive?.contentOrNull != "rime") return null
+        val asciiMode = root["ascii_mode"]?.jsonPrimitive?.booleanOrNull ?: return null
+        val capsLock = root["caps_lock"]?.jsonPrimitive?.booleanOrNull ?: return null
+        val isComposing = root["is_composing"]?.jsonPrimitive?.booleanOrNull ?: return null
+        val sessionToken = root["session_token"]?.jsonPrimitive?.takeIf { it.isString }?.contentOrNull
+            ?.takeIf { it.isNotBlank() } ?: return null
+        val sequence = root["sequence"]?.jsonPrimitive?.longOrNull?.takeIf { it >= 1 } ?: return null
+        root["timestamp"]?.jsonPrimitive?.longOrNull?.takeIf { it >= 1 } ?: return null
+
+        RimeSessionState(
+            state = ImeState(asciiMode, capsLock, isComposing),
+            sessionToken = sessionToken,
+            sequence = sequence
+        )
+    } catch (e: Exception) {
+        null
+    }
 }

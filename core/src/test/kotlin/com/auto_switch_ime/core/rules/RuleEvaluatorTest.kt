@@ -235,6 +235,20 @@ class RuleEvaluatorTest {
     }
 
     @Test
+    fun `ignores internal underscore when matching caps before caret`() {
+        val action = RuleEvaluator.evaluate(
+            before = "AA_A",
+            after = "AA",
+            chineseBeforeRegex = ".*[一-龥]$",
+            chineseAfterRegex = "^[一-龥].*",
+            capsBeforeRegex = ".*[A-Z]{2,}[0-9_]?$",
+            capsAfterRegex = "^[A-Z]{2,}.*"
+        )
+
+        assertEquals(ImeAction.CAPS, action)
+    }
+
+    @Test
     fun `returns english when rules are blank or invalid`() {
         val action = RuleEvaluator.evaluate(
             before = "plain",

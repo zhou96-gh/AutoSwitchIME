@@ -24,13 +24,13 @@ class RimeImeProvider(
     /** 状态文件变化回调 */
     override var onStateChanged: ((ImeState) -> Unit)? = null
 
-    val stateWatcher: StateWatcher
+    val stateWatcher: RimeStateWatcher
     private val weaselServerPath: String?
 
     init {
         weaselServerPath = config.weaselServerPath ?: WeaselPathDetector.detect(logger)
-        stateWatcher = StateWatcher(
-            stateFilePath = ImeConstants.getStateFilePath(ImeType.RIME),
+        stateWatcher = RimeStateWatcher(
+            stateFilePath = ImeConstants.getRimeStateFilePath(),
             logger = logger,
             onStateChanged = { state -> onImeStateChanged(state) }
         )

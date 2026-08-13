@@ -15,8 +15,6 @@ if [ -z "$WSL_USER" ]; then
     WSL_USER="$USER"
 fi
 RIME_DIR="/mnt/c/Users/$WSL_USER/AppData/Roaming/Rime"
-LUA_DIR="$RIME_DIR/lua"
-LUA_FILE="$LUA_DIR/rimevim_bridge.lua"
 SOURCE_LUA="$PROJECT_DIR/lua/rimevim_bridge.lua"
 WATCH_EXE="$PROJECT_DIR/ime-sys/target/x86_64-pc-windows-gnu/release/ime-watch.exe"
 PROCESSOR_LINE='    "engine/processors/@before 0": lua_processor@*rimevim_bridge'
@@ -67,32 +65,42 @@ done
 
 $HELP && { usage; exit 0; }
 
+# --dir 解析完成后再派生目标路径，避免仍写入默认 Rime 目录。
+LUA_DIR="$RIME_DIR/lua"
+LUA_FILE="$LUA_DIR/rimevim_bridge.lua"
+
 # ===== 工具函数 =====
 deploy_rime() {
     echo -e "${CYAN}→ 触发重新部署...${NC}"
 
     local ws=""
 
-    # 1. 注册表查询 (cmd.exe) — 2>/dev/null 屏蔽 CMD 的 UNC 路径警告
-    ws=$(cmd.exe /c 'reg query "HKLM\SOFTWARE\Rime\Weasel" /v WeaselRoot 2>nul' 2>/dev/null \
-        | sed -n 's/.*REG_SZ\s*//p' | tr -d '\r\n' | sed 's/[[:space:]]*$//')
+    # 1. 注册表查询
+    ws=$(
+        cmd.exe /c 'reg query "HKLM\SOFTWARE\Rime\Weasel" /v WeaselRoot 2>nul' 2>/dev/null \
+            | sed -n 's/.*REG_SZ\s*//p' | tr -d '\r\n' | sed 's/[[:space:]]*$//' \
+            || true
+    )
     if [ -n "$ws" ]; then
         ws="${ws}\\WeaselServer.exe"
     fi
 
-    # 2. 搜索 Program Files (通过 cmd.exe, 避免 /mnt/c 路径兼容问题)
+    # 2. 直接从 WSL 挂载盘扫描，避免 cmd.exe 在 UNC 工作目录下返回空结果。
     if [ -z "$ws" ]; then
-        ws=$(cmd.exe /c 'for /d %i in ("%ProgramFiles%\Rime\weasel-*") do @echo %i\WeaselServer.exe' 2>/dev/null | head -1)
-    fi
-    if [ -z "$ws" ]; then
-        ws=$(cmd.exe /c 'for /d %i in ("%ProgramFiles(x86)%\Rime\weasel-*") do @echo %i\WeaselServer.exe' 2>/dev/null | head -1)
-    fi
-    # 3. 再直接搜 WeaselServer.exe（怕目录名不是 weasel-*）
-    if [ -z "$ws" ]; then
-        ws=$(cmd.exe /c 'dir /s /b "%ProgramFiles%\Rime\WeaselServer.exe" 2>nul' 2>/dev/null | head -1)
-    fi
-    if [ -z "$ws" ]; then
-        ws=$(cmd.exe /c 'dir /s /b "%ProgramFiles(x86)%\Rime\WeaselServer.exe" 2>nul' 2>/dev/null | head -1)
+        local candidate=""
+        candidate=$(
+            {
+                for root in "/mnt/c/Program Files/Rime" "/mnt/c/Program Files (x86)/Rime"; do
+                    if [ -d "$root" ]; then
+                        find "$root" -maxdepth 3 -type f -iname 'WeaselServer.exe' -print
+                    fi
+                done
+                true
+            } | sort -V | tail -1
+        )
+        if [ -n "$candidate" ]; then
+            ws=$(wslpath -w "$candidate")
+        fi
     fi
 
     if [ -z "$ws" ]; then
@@ -102,8 +110,12 @@ deploy_rime() {
 
     echo -e "  ${GRAY}找到: $ws${NC}"
     # PowerShell 不受 UNC 路径问题影响
-    powershell.exe -NoProfile -Command "Start-Process -FilePath '$ws' -ArgumentList '/deploy'" 2>/dev/null || true
-    echo -e "  ${GRAY}部署指令已发送，约 10 秒后生效${NC}"
+    if powershell.exe -NoProfile -Command "Start-Process -FilePath '$ws' -ArgumentList '/deploy'" 2>/dev/null; then
+        echo -e "  ${GRAY}部署指令已发送，约 10 秒后生效${NC}"
+    else
+        echo -e "  ${RED}启动 WeaselServer.exe /deploy 失败${NC}"
+        return 1
+    fi
 }
 
 get_schema_names() {
@@ -278,7 +290,23 @@ echo -e "\n${CYAN}[2/4] 安装 Rime Lua 插件${NC}"
 echo -e "  ${GRAY}复制 rimevim_bridge.lua → Rime 的 lua 目录，注册为 Rime 的 lua_processor${NC}"
 mkdir -p "$LUA_DIR"
 cp "$SOURCE_LUA" "$LUA_FILE"
+if ! cmp -s "$SOURCE_LUA" "$LUA_FILE"; then
+    echo -e "${RED}✗ Lua 脚本复制校验失败: $LUA_FILE${NC}"
+    exit 1
+fi
 echo -e "${GREEN}✓ 已复制: $LUA_FILE${NC}"
+
+# 协议 v2 不再使用通用状态文件，部署时清理旧版本残留。
+WINDOWS_TEMP=$(powershell.exe -NoProfile -Command '[IO.Path]::GetTempPath()' 2>/dev/null | tr -d '\r\n')
+if [ -n "$WINDOWS_TEMP" ]; then
+    for legacy_name in ime-state-rime.json ime-state-rime-unknown.json; do
+        LEGACY_STATE_FILE=$(wslpath -u "${WINDOWS_TEMP}${legacy_name}")
+        if [ -f "$LEGACY_STATE_FILE" ]; then
+            rm -f "$LEGACY_STATE_FILE"
+            echo -e "${GREEN}✓ 已清理旧状态文件: ${WINDOWS_TEMP}${legacy_name}${NC}"
+        fi
+    done
+fi
 
 # 3. 配置 yaml
 echo -e "\n${CYAN}[3/4] 注册 processor 到方案配置${NC}"

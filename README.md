@@ -68,7 +68,7 @@ patch:
 ```
 
 3. 通过小狼毫托盘菜单执行“重新部署”。
-4. 切换一次中英文，确认 `%TEMP%\ime-state-rime.json` 已生成。
+4. 切换一次中英文，确认 `%TEMP%\ime-state-rime-v2.json` 已生成。
 
 更详细的桥接配置见 [lua/README.md](lua/README.md)。
 
@@ -131,7 +131,7 @@ docker compose run --rm --workdir /workspace/vscode dev npm test
 ## 故障排查
 
 - 无法切换输入法：检查 `WeaselServer.exe` 路径，并确认小狼毫正在运行。
-- 手动切换后状态不更新：确认 `%TEMP%\ime-state-rime.json` 存在且内容随输入法变化。
+- 手动切换后状态不更新：确认 `%TEMP%\ime-state-rime-v2.json` 存在、内容随输入法变化且 `protocol_version` 为 `2`。
 - Lua 桥未生效：确认 processor 加在当前实际使用的方案配置中，并重新部署小狼毫。
 - IntelliJ：在 `Settings > Tools > 自动切换输入` 使用“检测配置状态”，必要时开启日志。
 - VSCode：打开输出面板并选择 `Auto Switch IME` 查看日志。

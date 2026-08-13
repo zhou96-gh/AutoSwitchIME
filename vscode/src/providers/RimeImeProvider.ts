@@ -3,7 +3,7 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ImeProvider, ImeState, ImeType, Logger } from '../core/types';
-import { StateWatcher } from '../core/StateWatcher';
+import { RimeStateWatcher } from '../core/StateWatcher';
 import { initNative, isNativeAvailable, nativeCapsRead, nativeCapsSet, nativeIsComposing } from '../core/native';
 
 const execFileAsync = promisify(execFile);
@@ -85,7 +85,7 @@ function compareVersions(a: string, b: string): number {
 export class RimeImeProvider implements ImeProvider {
   readonly type = ImeType.RIME;
   readonly name = 'Rime/Weasel';
-  readonly stateWatcher: StateWatcher;
+  readonly stateWatcher: RimeStateWatcher;
 
   /** 状态文件变化回调（粘贴 Lua bridge 写入的最新状态） */
   onStateChanged?: (state: ImeState) => void;
@@ -111,8 +111,7 @@ export class RimeImeProvider implements ImeProvider {
     }
     this.logger.info(`Native DLL: ${isNativeAvailable() ? 'loaded' : 'unavailable'}`);
 
-    this.stateWatcher = new StateWatcher(
-      ImeType.RIME,
+    this.stateWatcher = new RimeStateWatcher(
       logger,
       (state: ImeState) => this.onImeStateChanged(state),
     );
