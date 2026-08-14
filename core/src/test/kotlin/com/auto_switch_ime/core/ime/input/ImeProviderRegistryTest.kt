@@ -1,5 +1,9 @@
-package com.auto_switch_ime.core
+package com.auto_switch_ime.core.ime.input
 
+import com.auto_switch_ime.core.ImeConfig
+import com.auto_switch_ime.core.ImeException
+import com.auto_switch_ime.core.ImeProvider
+import com.auto_switch_ime.core.ImeType
 import com.auto_switch_ime.core.util.Logger
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -28,17 +32,7 @@ class ImeProviderRegistryTest {
     private object FakeProvider : ImeProvider {
         override val type = ImeType.RIME
         override val name = "fake"
-        override var onStateChanged: ((ImeState) -> Unit)? = null
         override fun start() = Unit
-        override suspend fun setAsciiMode(ascii: Boolean, shouldContinue: () -> Boolean, forceLowercase: Boolean) = Unit
-        override suspend fun ensureAsciiMode(shouldContinue: () -> Boolean) = Unit
-        override suspend fun setCapsMode(shouldContinue: () -> Boolean) = Unit
-        override suspend fun releaseOwnedCapsLock() = Unit
-        override suspend fun isComposing(): Boolean = false
-        override fun getTrackedState() = ImeState(true, false)
-        override fun getCurrentState() = getTrackedState()
-        override fun refreshState() = Unit
-        override fun syncTrackedState(ascii: Boolean, caps: Boolean) = Unit
         override fun dispose() = Unit
     }
 

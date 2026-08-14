@@ -25,10 +25,15 @@ forbidden_prefixes = (
     'extension/node_modules/@koromix/koffi-darwin-',
     'extension/node_modules/@koromix/koffi-freebsd-',
     'extension/node_modules/@koromix/koffi-openbsd-',
+    'extension/out/providers/',
+    'extension/out/core/ImeGateway.',
+    'extension/out/core/StateWatcher.',
+    'extension/out/core/SystemImeProvider.',
+    'extension/out/core/native.',
 )
 forbidden = [n for n in names if n.startswith(forbidden_prefixes)]
 if forbidden:
-    print('VSIX contains non-Windows koffi native files:', file=sys.stderr)
+    print('VSIX contains forbidden runtime files:', file=sys.stderr)
     for name in forbidden[:20]:
         print(f'  {name}', file=sys.stderr)
     if len(forbidden) > 20:

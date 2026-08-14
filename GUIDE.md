@@ -27,8 +27,18 @@ cargo build --release --target x86_64-pc-windows-gnu --bin ime-watch
 | 文件 | 用途 |
 |---|---|
 | `target/.../release/ime_sys.dll` | IntelliJ JNA 加载 |
-| `target/.../release/ime-diag.exe` | 一次性状态诊断（读状态文件 + 物理 CapsLock） |
-| `target/.../release/ime-watch.exe` | CLI 监听工具，轮询物理 CapsLock + 状态文件变化 |
+| `target/.../release/ime-diag.exe` | 一次性系统 IME、composition 和物理 CapsLock 诊断 |
+| `target/.../release/ime-watch.exe` | CLI 监听系统 IME、composition 和物理 CapsLock 变化 |
+
+### 原生输入框实测
+
+先构建 release DLL，再从 Windows PowerShell 运行：
+
+```powershell
+pwsh -NoLogo -File .\scripts\ime-system-test.ps1
+```
+
+测试窗口提供真实输入框和 `ENGLISH`、`CHINESE`、`CAPS` 三个动作。只有测试窗口位于前台时，窗口标题、状态行和输入框背景才会每 100ms 使用 `ime_sys.dll` 的实际读取结果更新；失焦后显示 `INACTIVE`。模式动作会先恢复输入框焦点，并根据实际系统状态最多重试 3 次，以覆盖新输入框首次创建 Weasel session 的竞态。该脚本只用于开发验证，不进入插件发布包。
 
 ## IntelliJ 插件
 
@@ -53,7 +63,7 @@ rm auto-switch-ime-<version>.vsix
 packages/AutoSwitchIME-VSCode-<version>.vsix
 ```
 
-**native 绑定**：VSCode 通过 `koffi` 加载 `bin/ime_sys.dll`（FFI 直接调用 ime_caps_read/toggle/set），
+**native 绑定**：VSCode 通过 `koffi` 加载 `bin/ime_sys.dll`，读取/切换系统 IME 状态并控制 CapsLock，
 `bin/ime_sys.dll` + `node_modules/koffi/` + `node_modules/@koromix/koffi-win32-x64/` 自动打包进 VSIX。
 
 ## 诊断
@@ -62,43 +72,17 @@ packages/AutoSwitchIME-VSCode-<version>.vsix
 ```bash
 ime-diag.exe
 ```
-输出：状态文件路径、内容、物理 CapsLock 状态
+输出：系统 IME 可用性、open、ascii mode、conversion flags、composition 和物理 CapsLock。
 
 ### 持续监听
 ```bash
 ime-watch.exe
 ```
-同时监听物理 CapsLock + 状态文件，仅变化时打印：
+同时监听系统 IME、composition 和物理 CapsLock，仅变化时打印：
 ```
-   elapsed   ascii  caps_f  compos  phys_c
-[    0.0s]    true   false   false   false  initial
-[    2.1s]   false    true   false    true  change
-[    5.3s]    true   false   false   false  change
+[     0.0s] mode=native      caps=false composing=0 raw=4294969217 initial
+[     2.1s] mode=ascii       caps=false composing=0 raw=4294967296 change
 ```
 `Ctrl+C` 退出。
 
-## Rime Lua 桥部署
-
-### WSL (zsh/bash)
-
-```bash
-# 安装（交互选择方案）
-./scripts/ime-bridge-install.sh
-
-# 跳过交互直接指定方案
-./scripts/ime-bridge-install.sh -s rime_ice
-
-# 指定自定义 Rime 目录
-./scripts/ime-bridge-install.sh -d /mnt/d/Rime
-
-# 启动监听
-./scripts/ime-bridge-install.sh -w
-
-# 卸载
-./scripts/ime-bridge-install.sh -u
-
-# 帮助
-./scripts/ime-bridge-install.sh -h
-```
-
-状态文件写入 `%TEMP%\ime-state-rime.json`（write-tmp-rename 原子写入）。
+插件直接通过内置 `ime_sys.dll` 读取 Windows 系统 IME 状态，不需要部署 Rime Lua、状态文件或额外服务。

@@ -1,8 +1,16 @@
 import * as vscode from 'vscode';
 import { ImeCoordinator } from './ImeCoordinator';
-import { ImeProvider, ImeType, VSCodeLogger, VimMode } from './core/types';
-import { ImeProviderRegistry } from './providers/ImeProviderRegistry';
-import { RimeImeProvider } from './providers/RimeImeProvider';
+import { ImeGateway } from './ime/ImeGateway';
+import { ImeProviderRegistry } from './ime/input/ImeProviderRegistry';
+import { RimeImeProvider } from './ime/input/RimeImeProvider';
+import { initNative, isNativeAvailable } from './ime/system/native';
+import {
+  currentSystemType,
+  SystemImeProviderRegistry,
+  SystemType,
+  WindowsSystemImeProvider,
+} from './ime/system/SystemImeProvider';
+import { ImeType, VSCodeLogger, VimMode } from './core/types';
 import { VimModeDetector } from './vim/VimModeDetector';
 import { CaretColorManager } from './ui/CaretColor';
 import { ImeStatusBar } from './ui/StatusBar';
@@ -15,7 +23,7 @@ import {
 
 let outputChannel: vscode.OutputChannel;
 let logger: VSCodeLogger;
-let provider: ImeProvider;
+let imeGateway: ImeGateway;
 let modeDetector: VimModeDetector;
 let caretColor: CaretColorManager;
 let statusBar: ImeStatusBar | null = null;
@@ -23,7 +31,7 @@ let coordinator: ImeCoordinator | null = null;
 let settings: PluginSettings;
 let disposables: vscode.Disposable[] = [];
 let caretDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-let capsPollTimer: ReturnType<typeof setInterval> | null = null;
+let physicalStatePollTimer: ReturnType<typeof setInterval> | null = null;
 
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Auto Switch IME');
@@ -49,15 +57,21 @@ export function activate(context: vscode.ExtensionContext): void {
     return;
   }
 
+  initNative(context.extensionPath);
+  logger.info(`Native DLL: ${isNativeAvailable() ? 'loaded' : 'unavailable'}`);
+
   const providers = new ImeProviderRegistry();
   providers.register(ImeType.RIME, (config) => new RimeImeProvider(
       logger,
       config.weaselServerPath,
       (msg) => vscode.window.showWarningMessage(msg),
-      context.extensionPath,
     ));
-  provider = providers.create(settings.imeConfig);
-  provider.start();
+  const provider = providers.create(settings.imeConfig);
+  const systems = new SystemImeProviderRegistry();
+  systems.register(SystemType.WINDOWS, () => new WindowsSystemImeProvider());
+  const system = systems.create(currentSystemType());
+  imeGateway = new ImeGateway(provider, system, logger);
+  imeGateway.start();
 
   caretColor = new CaretColorManager(
     settings.chineseCaretColor,
@@ -72,14 +86,14 @@ export function activate(context: vscode.ExtensionContext): void {
   modeDetector.onModeChanged = onVimModeChanged;
 
   coordinator = new ImeCoordinator(
-    provider,
+    imeGateway,
     modeDetector,
     caretColor,
     () => statusBar,
     () => settings,
     logger,
   );
-  provider.onStateChanged = (state) => coordinator?.onPhysicalStateChanged(state);
+  imeGateway.onStateChanged = (state) => coordinator?.onPhysicalStateChanged(state);
 
   setupEditorListeners();
   disposables.push(
@@ -99,7 +113,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const editor = vscode.window.activeTextEditor;
   if (editor) coordinator.initializeEditor(editor);
 
-  capsPollTimer = setInterval(() => coordinator?.pollCapsLock(), 200);
+  physicalStatePollTimer = setInterval(() => coordinator?.pollPhysicalState(), 200);
   logger.info('AutoSwitchIME VSCode extension activated');
 }
 
@@ -110,9 +124,9 @@ export async function deactivate(): Promise<void> {
     clearTimeout(caretDebounceTimer);
     caretDebounceTimer = null;
   }
-  if (capsPollTimer) {
-    clearInterval(capsPollTimer);
-    capsPollTimer = null;
+  if (physicalStatePollTimer) {
+    clearInterval(physicalStatePollTimer);
+    physicalStatePollTimer = null;
   }
 
   for (const disposable of disposables) {
@@ -123,7 +137,7 @@ export async function deactivate(): Promise<void> {
   modeDetector?.dispose();
   await caretColor?.dispose();
   statusBar?.dispose();
-  provider?.dispose();
+  imeGateway?.dispose();
   coordinator = null;
 
   logger?.info('AutoSwitchIME VSCode extension deactivated');

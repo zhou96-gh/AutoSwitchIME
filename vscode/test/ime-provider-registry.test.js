@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { availableImeTypeFor, ImeType } = require('../out/core/types');
-const { ImeProviderRegistry } = require('../out/providers/ImeProviderRegistry');
+const { ImeProviderRegistry } = require('../out/ime/input/ImeProviderRegistry');
 
 test('creates registered provider and rejects unsupported type', () => {
   const registry = new ImeProviderRegistry();

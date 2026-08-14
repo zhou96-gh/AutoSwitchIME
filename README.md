@@ -1,10 +1,10 @@
-# RimeVimIME
+# AutoSwitchIME
 
 ![Auto Switch IME](resources/icon.png)
 
 面向 Windows + 小狼毫（Rime/Weasel）的 Vim 输入法自动切换插件，同时支持 JetBrains IDE 和 VSCode。
 
-[下载最新版本](https://github.com/zhou96-gh/RimeVimIME/releases/latest) | [更新日志](CHANGELOG.md) | [操作指南](GUIDE.md) | [问题反馈](https://github.com/zhou96-gh/RimeVimIME/issues)
+[下载最新版本](https://github.com/zhou96-gh/AutoSwitchIME/releases/latest) | [更新日志](CHANGELOG.md) | [操作指南](GUIDE.md) | [问题反馈](https://github.com/zhou96-gh/AutoSwitchIME/issues)
 
 ## 功能
 
@@ -29,14 +29,14 @@
 
 ### JetBrains IDE
 
-1. 从 [Releases](https://github.com/zhou96-gh/RimeVimIME/releases/latest) 下载 `AutoSwitchIME-IntelliJ-<version>.zip`。
+1. 从 [Releases](https://github.com/zhou96-gh/AutoSwitchIME/releases/latest) 下载 `AutoSwitchIME-IntelliJ-<version>.zip`。
 2. 打开 `Settings > Plugins`，点击齿轮按钮，选择 `Install Plugin from Disk...`。
 3. 选择下载的 ZIP，安装后重启 IDE。
-4. 在 `Settings > Tools > 自动切换输入` 中检查配置。
+4. 在 `Settings > Tools > 自动切换输入法` 中检查配置。
 
 ### VSCode
 
-1. 从 [Releases](https://github.com/zhou96-gh/RimeVimIME/releases/latest) 下载 `AutoSwitchIME-VSCode-<version>.vsix`。
+1. 从 [Releases](https://github.com/zhou96-gh/AutoSwitchIME/releases/latest) 下载 `AutoSwitchIME-VSCode-<version>.vsix`。
 2. 在扩展面板的 `...` 菜单中选择 `Install from VSIX...`。
 
 也可以使用命令行安装：
@@ -47,30 +47,7 @@ code --install-extension .\AutoSwitchIME-VSCode-<version>.vsix
 
 配置入口为 `Settings > Extensions > Auto Switch IME`。
 
-### 部署 Rime 状态桥
-
-插件通过 Lua 桥读取小狼毫的真实中英文和候选状态。先从 [Releases](https://github.com/zhou96-gh/RimeVimIME/releases/latest) 下载并解压 `RimeVimIME-Lua-<version>.zip`。
-
-使用 WSL 且已经克隆仓库时，也可以在仓库目录运行：
-
-```bash
-./scripts/ime-bridge-install.sh
-```
-
-使用 Release 中的 Lua ZIP 手动部署：
-
-1. 将解压后的 `rimevim_bridge.lua` 复制到 `%APPDATA%\Rime\lua\rimevim_bridge.lua`。
-2. 在当前方案对应的 `*.custom.yaml` 中加入：
-
-```yaml
-patch:
-  "engine/processors/@before 0": lua_processor@*rimevim_bridge
-```
-
-3. 通过小狼毫托盘菜单执行“重新部署”。
-4. 切换一次中英文，确认 `%TEMP%\ime-state-rime-v2.json` 已生成。
-
-更详细的桥接配置见 [lua/README.md](lua/README.md)。
+插件内置 `ime_sys.dll`，直接读取当前焦点编辑器的 Windows 系统 IME 转换状态和物理 CapsLock。安装 IntelliJ ZIP 或 VSCode VSIX 后即可使用，不需要部署 Rime Lua、状态文件、Weasel 补丁或额外服务。
 
 ## 模式行为
 
@@ -98,11 +75,11 @@ Insert 模式的中文和大写正则可分别配置光标前、光标后规则�
 | 光标前大写规则 | `insertModeCapsBeforeRegex` | `autoSwitchIME.capsBeforeRegex` |
 | 光标后大写规则 | `insertModeCapsAfterRegex` | `autoSwitchIME.capsAfterRegex` |
 
-当前“切换输入法”只开放 Rime，架构通过 Provider Registry 预留其他输入法实现入口。`WeaselServer.exe` 默认从注册表和常见安装目录自动检测；自动检测失败时再手动填写完整路径。
+当前“切换输入法”只开放 Rime。运行时由 `ImeGateway` 组合系统级默认能力与输入法级可选能力：Rime 只覆盖 Weasel 中英文切换，状态读取和 CapsLock 默认使用 Windows Provider。两级 Registry 分别预留其他操作系统和输入法实现入口。`WeaselServer.exe` 默认从注册表和常见安装目录自动检测；自动检测失败时再手动填写完整路径。
 
 恢复全部默认配置：
 
-- IntelliJ：在 `Settings > Tools > 自动切换输入` 点击“恢复默认设置”，再点击“应用”。点击“取消”可撤销本次恢复。
+- IntelliJ：在 `Settings > Tools > 自动切换输入法` 点击“恢复默认设置”，再点击“应用”。点击“取消”可撤销本次恢复。
 - VSCode：打开命令面板，执行 `Auto Switch IME: 恢复默认设置`。命令只清除本插件的用户、工作区和工作区文件夹配置，随后可按提示重新加载窗口。
 
 ## 开发与构建
@@ -131,20 +108,26 @@ docker compose run --rm --workdir /workspace/vscode dev npm test
 ## 故障排查
 
 - 无法切换输入法：检查 `WeaselServer.exe` 路径，并确认小狼毫正在运行。
-- 手动切换后状态不更新：确认 `%TEMP%\ime-state-rime-v2.json` 存在、内容随输入法变化且 `protocol_version` 为 `2`。
-- Lua 桥未生效：确认 processor 加在当前实际使用的方案配置中，并重新部署小狼毫。
-- IntelliJ：在 `Settings > Tools > 自动切换输入` 使用“检测配置状态”，必要时开启日志。
+- 手动切换后状态不更新：运行 `ime-watch.exe`，确认编辑器聚焦时 `mode` 会在 `native` 与 `ascii` 之间变化。
+- IntelliJ：在 `Settings > Tools > 自动切换输入法` 使用“检测配置状态”，必要时开启日志。
 - VSCode：打开输出面板并选择 `Auto Switch IME` 查看日志。
 
 ## 项目结构
 
 ```text
-core/       Kotlin 公共规则、状态和 Provider
-intellij/   JetBrains 插件
-vscode/     VSCode 扩展
-ime-sys/    Windows 原生输入法与 CapsLock 接口
-lua/        Rime 状态桥
-scripts/    部署、诊断和打包脚本
+core/                       Kotlin 公共逻辑
+  src/main/kotlin/.../ime/
+    ImeGateway.kt           两级能力选择与状态合并
+    input/                  输入法级 Provider
+    system/                 系统级 Provider 与原生绑定
+intellij/                   JetBrains 插件
+vscode/                     VSCode 扩展
+  src/ime/
+    ImeGateway.ts           两级能力选择与状态合并
+    input/                  输入法级 Provider
+    system/                 系统级 Provider 与原生绑定
+ime-sys/                    Windows 原生输入法与 CapsLock 接口
+scripts/                    诊断、校验和打包脚本
 ```
 
 ## 许可证

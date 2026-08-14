@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.auto_switch_ime</id>
-    <name>自动切换输入</name>
-    <vendor url="https://github.com/zhou96-gh/RimeVimIME">zhou96-gh</vendor>
+    <name>自动切换输入法</name>
+    <vendor url="https://github.com/zhou96-gh/AutoSwitchIME">zhou96-gh</vendor>
 
     <description><![CDATA[
     根据 Vim 模式自动切换输入法中英文状态（Rime/Weasel）。
@@ -20,7 +20,7 @@
                 parentId="tools"
                 instance="com.auto_switch_ime.settings.AutoSwitchIMESettingsConfigurable"
                 id="com.auto_switch_ime.settings.AutoSwitchIMESettingsConfigurable"
-                displayName="自动切换输入"/>
+                displayName="自动切换输入法"/>
         <applicationService
                 serviceImplementation="com.auto_switch_ime.settings.AutoSwitchIMESettings"/>
         <postStartupActivity implementation="com.auto_switch_ime.AutoSwitchIMEPlugin"/>

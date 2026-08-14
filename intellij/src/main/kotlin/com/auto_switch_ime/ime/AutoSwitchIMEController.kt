@@ -4,16 +4,19 @@ import com.auto_switch_ime.adapter.IntelliJLogger
 import com.auto_switch_ime.caret.CaretColorManager
 import com.auto_switch_ime.core.ImeAction
 import com.auto_switch_ime.core.ImeConfig
-import com.auto_switch_ime.core.ImeProvider
-import com.auto_switch_ime.core.ImeProviderFactory
 import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.ImeType
 import com.auto_switch_ime.core.NormalModePolicy
 import com.auto_switch_ime.core.coordinator.CoordinatorRequest
 import com.auto_switch_ime.core.coordinator.CoordinatorState
-import com.auto_switch_ime.core.ime.NativeImeSys
-import com.auto_switch_ime.core.ime.RimeImeProvider
-import com.auto_switch_ime.core.ime.WeaselPathDetector
+import com.auto_switch_ime.core.ime.ImeGateway
+import com.auto_switch_ime.core.ime.input.ImeProviderFactory
+import com.auto_switch_ime.core.ime.input.RimeImeProvider
+import com.auto_switch_ime.core.ime.input.WeaselPathDetector
+import com.auto_switch_ime.core.ime.system.NativeImeSys
+import com.auto_switch_ime.core.ime.system.SystemImeProviderRegistry
+import com.auto_switch_ime.core.ime.system.SystemType
+import com.auto_switch_ime.core.ime.system.WindowsSystemImeProvider
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import com.auto_switch_ime.util.ActionDeduplicator
 import com.auto_switch_ime.util.AutoSwitchIMELogger
@@ -50,12 +53,13 @@ class AutoSwitchIMEController : Disposable {
     private val normalLikeDefaultsApplied = Collections.synchronizedMap(WeakHashMap<Editor, Boolean>())
     private val strictNormalEditors = Collections.synchronizedMap(WeakHashMap<Editor, Boolean>())
     private var drainScheduled = false
-    private val physicalStateCheckTimer = Timer(100) { refreshPhysicalStateAfterKey() }.apply {
-        isRepeats = false
+    private val physicalStatePollTimer = Timer(200) { requestPhysicalStateRefresh() }.apply {
+        isRepeats = true
+        start()
     }
     private val keyEventDispatcher = java.awt.KeyEventDispatcher { event ->
         if (event.id == KeyEvent.KEY_RELEASED && AutoSwitchIMESettings.instance.enabled) {
-            physicalStateCheckTimer.restart()
+            requestPhysicalStateRefresh()
         }
         false
     }
@@ -64,7 +68,7 @@ class AutoSwitchIMEController : Disposable {
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keyEventDispatcher)
     }
 
-    private val providerDelegate = lazy<ImeProvider> {
+    private val gatewayDelegate = lazy {
         ImeProviderFactory.register(ImeType.RIME) { config, providerLogger ->
             RimeImeProvider(config, providerLogger)
         }
@@ -73,27 +77,36 @@ class AutoSwitchIMEController : Disposable {
             type = ImeType.fromConfig(settings.imeType),
             weaselServerPath = settings.weaselServerPath.ifBlank { null }
         )
-        ImeProviderFactory.createProvider(config, logger).also { imeProvider ->
-            imeProvider.onStateChanged = ::onPhysicalStateChanged
-            imeProvider.start()
+        val provider = ImeProviderFactory.createProvider(config, logger)
+        val systems = SystemImeProviderRegistry().apply {
+            register(SystemType.WINDOWS, ::WindowsSystemImeProvider)
+        }
+        val system = systems.create(SystemType.current())
+        ImeGateway(provider, system, logger).also { gateway ->
+            gateway.onStateChanged = ::onPhysicalStateChanged
+            gateway.start()
         }
     }
-    private val provider: ImeProvider by providerDelegate
+    private val gateway: ImeGateway by gatewayDelegate
 
-    fun getTrackedState(): ImeState = provider.getTrackedState()
+    fun getTrackedState(): ImeState = gateway.getTrackedState()
 
-    fun getCurrentState(): ImeState = provider.getCurrentState()
+    fun getCurrentState(): ImeState {
+        val editor = EditorFactory.getInstance().allEditors.firstOrNull(::isPlatformEditorFocused)
+            ?: return gateway.getTrackedState()
+        return if (isPlatformEditorFocused(editor)) gateway.getCurrentState() else gateway.getTrackedState()
+    }
 
     fun setAsciiMode(ascii: Boolean) {
-        runBlocking { provider.setAsciiMode(ascii) }
+        runBlocking { gateway.setAsciiMode(ascii) }
     }
 
     fun setCapsMode() {
-        runBlocking { provider.setCapsMode() }
+        runBlocking { gateway.setCapsMode() }
     }
 
     fun releaseOwnedCapsLock() {
-        runBlocking { provider.releaseOwnedCapsLock() }
+        runBlocking { gateway.releaseOwnedCapsLock() }
     }
 
     fun resolvePath(): String? = WeaselPathDetector.detect(logger)
@@ -170,14 +183,12 @@ class AutoSwitchIMEController : Disposable {
         postEvent(CoordinatorEvent.PhysicalStateChanged(state))
     }
 
-    private fun refreshPhysicalStateAfterKey() {
+    private fun requestPhysicalStateRefresh() {
         if (disposed.get()) return
         val focusedEditor = EditorFactory.getInstance().allEditors.firstOrNull {
             !it.isDisposed && it.contentComponent.hasFocus()
         } ?: return
-
-        provider.refreshState()
-        onPhysicalStateChanged(provider.getTrackedState())
+        postEvent(CoordinatorEvent.RefreshPhysicalState(focusedEditor))
     }
 
     private fun postEvent(event: CoordinatorEvent, discardPendingContexts: Boolean = false) {
@@ -189,6 +200,9 @@ class AutoSwitchIMEController : Disposable {
             }
             if (event is CoordinatorEvent.PhysicalStateChanged) {
                 events.removeIf { it is CoordinatorEvent.PhysicalStateChanged }
+            }
+            if (event is CoordinatorEvent.RefreshPhysicalState) {
+                events.removeIf { it is CoordinatorEvent.RefreshPhysicalState }
             }
             events.addLast(event)
             if (drainScheduled) return
@@ -216,6 +230,7 @@ class AutoSwitchIMEController : Disposable {
                     is CoordinatorEvent.EditorContext -> handleEditorContext(event)
                     is CoordinatorEvent.FocusLost -> handleFocusLost(event)
                     is CoordinatorEvent.PhysicalStateChanged -> handlePhysicalStateChanged(event.state)
+                    is CoordinatorEvent.RefreshPhysicalState -> handleRefreshPhysicalState(event.editor)
                     CoordinatorEvent.Shutdown -> handleShutdown()
                 }
             } catch (e: Exception) {
@@ -226,12 +241,14 @@ class AutoSwitchIMEController : Disposable {
 
     private fun handleEditorContext(event: CoordinatorEvent.EditorContext) {
         if (!isCurrent(event)) return
+        gateway.refreshState()
+        if (!isCurrent(event)) return
 
-        if (!event.normalLike && !provider.getTrackedState().isAsciiMode) {
-            val composing = runBlocking { provider.isComposing() }
+        if (!event.normalLike && !gateway.getTrackedState().isAsciiMode) {
+            val composing = gateway.isComposing()
             if (composing) {
-                AutoSwitchIMELogger.debug("${event.source}: Rime is composing, skipping IME switch")
-                updateCaretWhenCurrent(event, provider.getTrackedState())
+                AutoSwitchIMELogger.debug("${event.source}: IME is composing, skipping switch")
+                updateCaretWhenCurrent(event, gateway.getTrackedState())
                 return
             }
         }
@@ -244,9 +261,9 @@ class AutoSwitchIMEController : Disposable {
         if (event.action != ImeAction.UNCHANGED) {
             runBlocking {
                 when (event.action) {
-                    ImeAction.CHINESE -> provider.setAsciiMode(false, isCurrent)
-                    ImeAction.CAPS -> provider.setCapsMode(isCurrent)
-                    ImeAction.ENGLISH -> provider.setAsciiMode(true, isCurrent, event.strictNormal)
+                    ImeAction.CHINESE -> gateway.setAsciiMode(false, isCurrent)
+                    ImeAction.CAPS -> gateway.setCapsMode(isCurrent)
+                    ImeAction.ENGLISH -> gateway.setAsciiMode(true, isCurrent, event.strictNormal)
                     ImeAction.UNCHANGED -> Unit
                 }
             }
@@ -256,7 +273,7 @@ class AutoSwitchIMEController : Disposable {
         if (event.normalLike) {
             normalLikeDefaultsApplied[event.editor] = true
         }
-        updateCaretWhenCurrent(event, provider.getTrackedState())
+        updateCaretWhenCurrent(event, gateway.getTrackedState())
     }
 
     private fun updateCaretWhenCurrent(event: CoordinatorEvent.EditorContext, state: ImeState) {
@@ -268,15 +285,23 @@ class AutoSwitchIMEController : Disposable {
     }
 
     private fun isCurrent(event: CoordinatorEvent.EditorContext): Boolean {
-        val platformFocused = !event.editor.isDisposed && event.editor.contentComponent.hasFocus()
+        return coordinatorState.isCurrent(event.request, isPlatformEditorFocused(event.editor))
+    }
+
+    private fun isPlatformEditorFocused(editor: Editor): Boolean {
+        if (editor.isDisposed || !editor.contentComponent.hasFocus()) return false
         val foregroundProcessId = NativeImeSys.imeForegroundProcessId()
-        val sameProcess = foregroundProcessId != 0L && foregroundProcessId == ProcessHandle.current().pid()
-        return coordinatorState.isCurrent(event.request, platformFocused && sameProcess)
+        return foregroundProcessId != 0L && foregroundProcessId == ProcessHandle.current().pid()
+    }
+
+    private fun handleRefreshPhysicalState(editor: Editor) {
+        if (!isPlatformEditorFocused(editor)) return
+        gateway.refreshState()
     }
 
     private fun handleFocusLost(event: CoordinatorEvent.FocusLost) {
         AutoSwitchIMELogger.debug("Editor focus lost, releasing owned CapsLock: ${event.editor.hashCode()}")
-        runBlocking { provider.releaseOwnedCapsLock() }
+        runBlocking { gateway.releaseOwnedCapsLock() }
     }
 
     private fun handlePhysicalStateChanged(state: ImeState) {
@@ -298,15 +323,15 @@ class AutoSwitchIMEController : Disposable {
     }
 
     private fun handleShutdown() {
-        if (providerDelegate.isInitialized()) {
-            runBlocking { provider.releaseOwnedCapsLock() }
+        if (gatewayDelegate.isInitialized()) {
+            runBlocking { gateway.releaseOwnedCapsLock() }
         }
     }
 
     override fun dispose() {
         if (!disposed.compareAndSet(false, true)) return
 
-        physicalStateCheckTimer.stop()
+        physicalStatePollTimer.stop()
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyEventDispatcher)
         coordinatorState.shutdown()
         postEvent(CoordinatorEvent.Shutdown, discardPendingContexts = true)
@@ -319,8 +344,8 @@ class AutoSwitchIMEController : Disposable {
             switchExecutor.shutdownNow()
             Thread.currentThread().interrupt()
         } finally {
-            if (providerDelegate.isInitialized()) {
-                provider.dispose()
+            if (gatewayDelegate.isInitialized()) {
+                gateway.dispose()
             }
         }
     }
@@ -338,6 +363,7 @@ class AutoSwitchIMEController : Disposable {
 
         data class FocusLost(val editor: Editor) : CoordinatorEvent
         data class PhysicalStateChanged(val state: ImeState) : CoordinatorEvent
+        data class RefreshPhysicalState(val editor: Editor) : CoordinatorEvent
         data object Shutdown : CoordinatorEvent
     }
 

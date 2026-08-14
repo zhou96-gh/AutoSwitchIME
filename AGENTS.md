@@ -2,7 +2,7 @@
 
 IntelliJ/VSCode 插件：Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示。
 
-**当前版本**: v3.0.1
+**当前版本**: v3.1.0
 
 ## 开发环境
 
@@ -23,11 +23,11 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 |------|------|------|
 | 环境构建 | [`agents/env-build.md`](agents/env-build.md) | 工具链版本、Docker 构建、GitHub 发布 |
 | IdeaVim 集成 | [`agents/ideavim-integration.md`](agents/ideavim-integration.md) | VimExtension、plugin.xml |
-| 输入法控制 | [`agents/ime-control.md`](agents/ime-control.md) | ImeProvider、Rime、WeaselServer |
+| 输入法控制 | [`agents/ime-control.md`](agents/ime-control.md) | ImeGateway、系统 Provider、输入法 Provider |
 | UI/光标 | [`agents/ui-caret.md`](agents/ui-caret.md) | 光标颜色管理（IntelliJ+VSCode） |
 | 设置面板 | [`agents/settings.md`](agents/settings.md) | 配置项、正则规则（IntelliJ+VSCode） |
 | 已知问题 | [`agents/issues.md`](agents/issues.md) | 版本日志、待完成、已知 bug |
-| 架构设计 | Obsidian `技术/自研规划/AutoSwitchIME/IME Coordinator Actor 架构设计.md` | 输入法 Coordinator Actor 与多编辑器调度；方案设计相关文档统一归档到该子项目分组 |
+| 架构设计 | Obsidian `技术/自研规划/AutoSwitchIME/项目规划/输入法接管/流程设计.md` | 输入法接管、Coordinator、多编辑器调度与项目结构；关联设计统一归档到同一功能分组 |
 
 ## 快速参考
 
@@ -39,10 +39,11 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 
 ## 开发约束
 
-- 状态真相源必须是物理检测值，不信任软件缓存
-- VSCode 与 IntelliJ 行为一致，差异在 provider 层隔离
+- 输入状态真相源必须来自焦点校验后的输入法级可选能力或系统级默认能力，不信任状态文件；当前 Windows 默认实现读取系统 IME 与物理 CapsLock
+- VSCode 与 IntelliJ 行为一致，操作系统差异和输入法差异分别在两级 Provider 隔离
 - 整体架构固定分为输入监控、输入切换处理、光标颜色处理三部分；三者只通过 `ImeState` 和 Coordinator 事件协作，不得互相读取平台实现细节
-- 输入法实现通过 `ImeProvider` 和 Provider Registry 扩展；配置项 `imeType` 默认 `rime`，未实现的输入法不得出现在可选列表
+- `ImeGateway` 按单项能力合并两级 Provider：输入法级已实现则优先使用，未实现才使用系统级；专用切换执行失败不得静默降级
+- 操作系统通过 `SystemImeProvider` 和 Registry 扩展，输入法通过 `ImeProvider` 和 Registry 按需实现；未实现的输入法不得出现在可选列表
 - 光标颜色只绑定当前实际 `ImeState`，不得附加 Vim 模式、规则动作、焦点或其他显示条件
 - 所有原生 Win32 调用集中在 `ime-sys/`
 
@@ -51,4 +52,4 @@ wsl+docker,只允许在docker中安装开发环境，不允许在未经同意的
 - 每次打包前必须先根据本次改动判断并更新版本号，不能复用旧版本号打包。
 - 语义版本判断：修复或行为修正用 patch，新增向后兼容功能用 minor，破坏性变更用 major。
 - 版本源必须同步更新：本文件当前版本、`gradle.properties` 的 `pluginVersion`、`vscode/package.json` 的 `version`、`vscode/package-lock.json` 顶部包版本。
-- 打包后必须验证产物文件名和插件元数据版本一致，检查 `packages/AutoSwitchIME-IntelliJ-<version>.zip`、`packages/AutoSwitchIME-VSCode-<version>.vsix` 与 `packages/RimeVimIME-Lua-<version>.zip`；完整发布流程见 `agents/env-build.md`。
+- 打包后必须验证产物文件名和插件元数据版本一致，检查 `packages/AutoSwitchIME-IntelliJ-<version>.zip` 与 `packages/AutoSwitchIME-VSCode-<version>.vsix`；完整发布流程见 `agents/env-build.md`。

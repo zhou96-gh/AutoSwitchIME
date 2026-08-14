@@ -14,7 +14,7 @@
 
 ## 使用前准备
 
-扩展依赖 Rime Lua 状态桥。完整安装、配置和故障排查说明见 [GitHub 项目主页](https://github.com/zhou96-gh/RimeVimIME#readme)。
+扩展内置 Windows 输入状态组件，无需额外部署脚本或服务。完整安装、配置和故障排查说明见 [GitHub 项目主页](https://github.com/zhou96-gh/AutoSwitchIME#readme)。
 
 ## 系统要求
 
@@ -25,7 +25,7 @@
 
 ## 问题反馈
 
-[GitHub Issues](https://github.com/zhou96-gh/RimeVimIME/issues)
+[GitHub Issues](https://github.com/zhou96-gh/AutoSwitchIME/issues)
 
 ## 许可证
 

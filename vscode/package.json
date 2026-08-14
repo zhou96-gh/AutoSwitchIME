@@ -2,16 +2,16 @@
   "name": "auto-switch-ime",
   "displayName": "Auto Switch IME",
   "description": "Vim 模式切换时自动切换输入法中英文状态，并用光标颜色指示",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "publisher": "auto-switch-ime",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhou96-gh/RimeVimIME.git"
+    "url": "https://github.com/zhou96-gh/AutoSwitchIME.git"
   },
-  "homepage": "https://github.com/zhou96-gh/RimeVimIME#readme",
+  "homepage": "https://github.com/zhou96-gh/AutoSwitchIME#readme",
   "bugs": {
-    "url": "https://github.com/zhou96-gh/RimeVimIME/issues"
+    "url": "https://github.com/zhou96-gh/AutoSwitchIME/issues"
   },
   "icon": "resources/icon.png",
   "engines": {

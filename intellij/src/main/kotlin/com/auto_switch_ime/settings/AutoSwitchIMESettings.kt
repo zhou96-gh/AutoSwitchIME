@@ -11,7 +11,7 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.xmlb.XmlSerializerUtil
 import com.auto_switch_ime.core.ImeType
-import com.auto_switch_ime.core.ime.WeaselPathDetector
+import com.auto_switch_ime.core.ime.input.WeaselPathDetector
 import com.auto_switch_ime.util.AutoSwitchIMELogger
 import org.jetbrains.annotations.Nls
 import java.awt.BorderLayout
@@ -94,7 +94,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
     private var regexResultArea: JTextArea? = null
 
     @Nls(capitalization = Nls.Capitalization.Title)
-    override fun getDisplayName(): String = "自动切换输入"
+    override fun getDisplayName(): String = "自动切换输入法"
 
     override fun createComponent(): JComponent {
         settingsPanel = JPanel(GridBagLayout())
@@ -103,7 +103,7 @@ class AutoSwitchIMESettingsConfigurable : Configurable {
         gbc.anchor = GridBagConstraints.WEST
 
         // 启用开关
-        enabledCheckBox = JCheckBox("启用自动切换输入")
+        enabledCheckBox = JCheckBox("启用自动切换输入法")
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2
         settingsPanel!!.add(enabledCheckBox, gbc)
 

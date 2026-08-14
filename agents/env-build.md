@@ -53,7 +53,7 @@ python3 -B scripts/check-version-consistency.py
 
 ```bash
 # 构建镜像
-cd /projects/ai_code/RimeVimIME
+cd /projects/ai_code/AutoSwitchIME
 docker compose build
 
 # 交互式 shell
@@ -82,6 +82,7 @@ ime-sys/target/x86_64-pc-windows-gnu/release/
 - 多模块架构下必须指定 `:intellij:buildPlugin`
 - JNA 依赖为 `compileOnly`（IDE 自带，打包会冲突）
 - Rust 交叉编译使用 mingw-w64 linker，产物为 Windows `.dll`
+- VSCode 打包前必须删除生成目录 `vscode/out/`，避免已经删除的源码模块以旧 JavaScript 形式残留在 VSIX。
 
 ## GitHub 发布
 
@@ -89,22 +90,19 @@ ime-sys/target/x86_64-pc-windows-gnu/release/
 
 ### 发布产物
 
-每个正式 Release 必须同时上传以下三个附件，文件名中的版本必须与插件元数据一致：
+每个正式 Release 必须同时上传以下两个附件，文件名中的版本必须与插件元数据一致：
 
 - `packages/AutoSwitchIME-IntelliJ-<version>.zip`
 - `packages/AutoSwitchIME-VSCode-<version>.vsix`
-- `packages/RimeVimIME-Lua-<version>.zip`
-
-Lua ZIP 必须至少包含 `rimevim_bridge.lua`、适用的 `*.custom.yaml` 示例和安装说明。Lua 桥是运行时必需组件，不得只依赖 GitHub 自动生成的 Source code 压缩包提供。
 
 ### 发布顺序
 
 1. 根据改动类型升级版本，并同步全部版本源和 `CHANGELOG.md`。
-2. 清理 `packages/` 中本次版本的同名残留，运行 `scripts/build-all.sh` 生成三个附件；重新发布时保留上一版本产物直至新 Release 验证成功。
-3. 运行版本一致性、IntelliJ 插件、VSCode 扩展和 Lua ZIP 内容检查，并记录三个附件的 SHA-256。
+2. 清理 `packages/` 中本次版本的同名残留，运行 `scripts/build-all.sh` 生成两个附件；重新发布时保留上一版本产物直至新 Release 验证成功。
+3. 运行版本一致性、IntelliJ 插件和 VSCode 扩展检查，并记录两个附件的 SHA-256。
 4. 在 `develop` 提交并推送发布变更，创建以 `master` 为目标分支的 PR；验证 PR 内容后合入 `master`。
 5. 确认远端 `master` 指向发布提交，再创建带注释的 `v<version>` 标签并推送该标签。
-6. 创建非草稿、非预发布的 GitHub Release，上传三个附件，并在正文中写明主要变更、安装入口和 SHA-256。
+6. 创建非草稿、非预发布的 GitHub Release，上传两个附件，并在正文中写明主要变更、安装入口和 SHA-256。
 7. 回读 Release，确认标签目标、附件名称、附件大小和下载地址均正确后，才算发布成功。
 8. 将发布后的 `master` 同步回 `develop` 并推送，保留本地和远端 `develop` 供下一版本继续开发。
 

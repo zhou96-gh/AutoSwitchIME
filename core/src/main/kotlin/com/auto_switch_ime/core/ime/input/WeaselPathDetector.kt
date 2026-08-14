@@ -1,4 +1,4 @@
-package com.auto_switch_ime.core.ime
+package com.auto_switch_ime.core.ime.input
 
 import com.auto_switch_ime.core.util.Logger
 import com.sun.jna.platform.win32.Advapi32Util
