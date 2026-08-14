@@ -1,57 +1,52 @@
 package com.auto_switch_ime.core
 
 /**
- * 平台无关的输入法提供者接口
- * 各输入法实现此接口以支持 IME 切换
+ * 输入法专用能力容器。
+ *
+ * Provider 只实现与系统默认行为不同的能力；未提供的能力由 ImeGateway 交给系统级服务。
  */
 interface ImeProvider {
     val type: ImeType
 
-    /** 输入法名称，用于日志和调试 */
+    /** 输入法名称，用于日志和调试。 */
     val name: String
 
-    var onStateChanged: ((ImeState) -> Unit)?
+    /** 输入法专用状态源；未提供或字段不可用时回退到系统级状态。 */
+    val stateSource: ImeStateSource?
+        get() = null
+
+    /** 输入法专用中英文切换；未提供时使用系统级切换。 */
+    val asciiModeSwitcher: ImeAsciiModeSwitcher?
+        get() = null
+
+    /** 输入法专用 CapsLock 切换；未提供时使用系统级切换。 */
+    val capsLockSwitcher: ImeCapsLockSwitcher?
+        get() = null
 
     fun start()
 
-    /** 切换中英文模式 */
-    suspend fun setAsciiMode(
-        ascii: Boolean,
-        shouldContinue: () -> Boolean = { true },
-        forceLowercase: Boolean = false
-    )
-
-    /** 确保输入法处于英文模式，但不改变 CapsLock。 */
-    suspend fun ensureAsciiMode(shouldContinue: () -> Boolean = { true })
-
-    /** 切换大写模式 */
-    suspend fun setCapsMode(shouldContinue: () -> Boolean = { true })
-
-    /** 释放插件自身开启的 CapsLock，不影响用户原本开启的 CapsLock */
-    suspend fun releaseOwnedCapsLock()
-    
-    /** 是否正在输入（显示候选词窗口） */
-    suspend fun isComposing(): Boolean
-    
-    /** 获取当前跟踪的 IME 状态 */
-    fun getTrackedState(): ImeState
-
-    /** 获取当前实际 IME 状态，检测不可用时回退到跟踪状态。 */
-    fun getCurrentState(): ImeState
-
-    /** 主动刷新 Provider 的状态源。 */
-    fun refreshState()
-
-    /** 同步内部跟踪状态（不触发实际切换） */
-    fun syncTrackedState(ascii: Boolean, caps: Boolean)
-    
-    /** 释放资源 */
     fun dispose()
 }
 
-/**
- * IME 状态数据类
- */
+/** 输入法级别可以只提供其中一部分状态。 */
+interface ImeStateSource {
+    fun readAsciiMode(): Boolean? = null
+
+    fun readCapsLock(): Boolean? = null
+
+    fun readComposing(): Boolean? = null
+}
+
+fun interface ImeAsciiModeSwitcher {
+    /** 返回 false 表示输入法专用切换执行失败，不再降级到系统级切换。 */
+    suspend fun switchAsciiMode(ascii: Boolean, shouldContinue: () -> Boolean): Boolean
+}
+
+fun interface ImeCapsLockSwitcher {
+    /** 返回 false 表示输入法专用切换执行失败，不再降级到系统级切换。 */
+    suspend fun switchCapsLock(enabled: Boolean, shouldContinue: () -> Boolean): Boolean
+}
+
 data class ImeState(
     val isAsciiMode: Boolean,
     val isCapsLock: Boolean,

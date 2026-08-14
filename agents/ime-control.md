@@ -2,113 +2,117 @@
 
 ## 架构
 
-```
-ime-sys/ (Rust)
-├── caps.rs: ime_caps_read / ime_caps_toggle / ime_caps_set (导出 i32)
-├── ime.rs: 前台窗口/进程检测与 composition 检测
-├── ime-diag: CLI 一次性诊断
-├── ime-helper: CLI 切换工具
-└── ime-watch: CLI 持续监听
-
-core/ (Kotlin)
-├── ImeProvider 接口: Provider 生命周期、切换和状态读取契约
-├── ImeProviderRegistry: 按 ImeType 注册和创建 Provider
-├── RimeImeProvider (实现)
-├── NativeImeSys (JNA → ime_sys.dll)
-└── RimeStateWatcher (WatchService 监听并校验 Rime session 状态文件)
-
-intellij/ (Kotlin + JNA)
-├── AutoSwitchIMEPlugin: 插件入口，加载 NativeImeSys
-└── AutoSwitchIMEController: Coordinator Actor，串行处理编辑器、焦点和物理状态事件
-
-vscode/ (TypeScript + koffi)
-├── native.ts: koffi → ime_sys.dll（FFI 直接调用）
-├── ImeProviderRegistry.ts: 按 ImeType 注册和创建 Provider
-├── RimeImeProvider.ts: ImeProvider 实现
-├── RimeStateWatcher: fs.watchFile 监听并校验 Rime session 状态文件
-├── ImeCoordinator.ts: Promise mailbox，串行处理全部输入法事件
-└── extension.ts: 插件入口和事件监听器装配
+```text
+Coordinator
+  -> ImeGateway
+      ├── ImeProvider             # 输入法级可选能力
+      │   └── RimeImeProvider     # 仅 Weasel 中英文切换
+      └── SystemImeProvider       # 系统级默认能力
+          └── WindowsSystemImeProvider
+              └── NativeImeSys -> ime_sys.dll -> Win32
 ```
 
-整体职责固定切分为三部分：
+Kotlin 与 TypeScript 必须保持同一职责：
 
-1. 输入监控：编辑器、Vim、焦点、状态文件和物理 CapsLock 监听，只产生上下文或 `ImeState` 事件。
-2. 输入切换处理：Coordinator 串行决策，`ImeProvider` 执行具体输入法切换并返回实际状态。
-3. 光标颜色处理：只把实际 `ImeState` 映射为英文、中文或 CapsLock 颜色，不参与切换决策。
+- 两端 IME 代码统一放入 `ime/`：Gateway 位于根级，输入法级实现位于 `ime/input/`，系统级实现与原生绑定位于 `ime/system/`。
+- `ImeGateway`：状态逐字段合并、能力选择、状态缓存与发布、CapsLock 所有权。
+- `ImeProvider`：按需暴露输入法专用状态源、中英文切换或 CapsLock 切换。
+- `SystemImeProvider`：提供当前操作系统的默认状态读取与切换能力。
+- 两级 Registry：分别按输入法类型和操作系统类型注册实现。
+- Coordinator：焦点门禁、请求代次、规则、composition 保护与效果执行。
 
-## 核心链路
+插件不依赖 Lua、Rime 状态文件、Weasel 补丁或额外常驻服务。`ime_sys.dll` 内置在 IntelliJ ZIP 和 VSCode VSIX 中，不单独部署。
 
-Vim/编辑器/焦点/物理状态变化 → Coordinator → RimeImeProvider:
-1. `setCapsMode()`: nativeCapsSet(true) → 物理开启 CapsLock
-2. `setAsciiMode(ascii)`: 必要时释放插件自己开启的 CapsLock + WeaselServer.exe /ascii|/nascii
-3. `getTrackedState()`: ascii_mode 来自跟踪值, caps_lock 来自即时物理读
-4. `isComposing()`: 优先 native ime_is_composing(), 失败时 fallback 状态文件
+## 能力选择
 
-Coordinator 是唯一自动切换入口：事件邮箱严格串行，新编辑上下文会使旧请求失效，失焦和关闭事件会清空待处理上下文并释放插件持有的 CapsLock。Provider 只执行系统操作、读取物理状态和跟踪自身 IME 状态。
+状态读取按字段选择，不要求输入法 Provider 实现完整状态：
 
-Provider 由平台入口注册到 Registry，再按配置中的 `imeType` 创建。当前只注册并开放 Rime，默认值为 `rime`；新增输入法时必须新增独立 Provider 并在两端入口注册，Coordinator 和光标模块不得依赖具体实现。
-
-IntelliJ 和 VSCode 的 UI/监听器入口不得直接调用 Provider；必须向各自 Coordinator 提交事件。同步方法只允许控制器内部或非 UI 诊断路径使用，避免 `WeaselServer.exe` 等外部调用阻塞界面。
-
-所有会修改系统全局输入法或 CapsLock 的自动切换请求，必须在实际执行前同时确认 Coordinator 请求仍有效、编辑器实时聚焦且 Win32 前台窗口仍属于触发请求的应用。IntelliJ 校验前台窗口进程 PID，VSCode 校验获得窗口焦点时登记的 HWND；不能只依赖先前收到的焦点事件。Provider 启动 WeaselServer 或修改 CapsLock 前必须再次调用同一有效性检查。原生前台归属检测不可用时必须拒绝切换，不能降级放行。失焦后只允许释放插件自己开启的 CapsLock，不允许继续执行排队中的上下文切换。
-
-精确 Normal 模式必须始终保持小写英文；检测到中文或 CapsLock 开启时，通过 Coordinator 的严格 Normal 动作恢复小写英文，不绑定具体输入法快捷键。严格 Normal 关闭 CapsLock 是用户手动状态所有权的唯一例外，每次物理写入前仍必须确认请求有效、编辑器聚焦且前台窗口属于当前应用。两端状态文件监听即使已启用文件系统事件，也必须每 500ms 主动回读作为漏事件兜底。IntelliJ 在编辑器聚焦期间必须于任意按键释放后主动读取物理 CapsLock 并提交状态事件，确保颜色更新不依赖状态文件变化。Visual、Command 等其他 normal-like 模式只在进入或重新聚焦时默认英文，默认动作成功后允许用户手动切换。光标颜色只读取实际输入状态，不能依赖模式判断。
-
-物理 CapsLock 是唯一真相源，无软件镜像状态。
-
-CapsLock 有所有权边界：除严格 Normal 模式为保持小写英文而关闭当前应用内手动开启的 CapsLock 外，只有插件从关闭状态主动打开的 CapsLock 才由插件释放；窗口失焦或插件停用不得关闭用户手动开启的 CapsLock。
-
-## ImeProvider 接口
-
-```kotlin
-interface ImeProvider {
-    val type: ImeType
-    val name: String
-    var onStateChanged: ((ImeState) -> Unit)?
-    fun start()
-    suspend fun setAsciiMode(ascii: Boolean)
-    suspend fun ensureAsciiMode()
-    suspend fun setCapsMode()
-    suspend fun releaseOwnedCapsLock()
-    suspend fun isComposing(): Boolean
-    fun getTrackedState(): ImeState
-    fun getCurrentState(): ImeState
-    fun refreshState()
-    fun syncTrackedState(ascii: Boolean, caps: Boolean)
-    fun dispose()
-}
+```text
+中英文：ImeProvider.readAsciiMode()  ?? SystemImeProvider.readAsciiMode()
+大写：  ImeProvider.readCapsLock()   ?? SystemImeProvider.readCapsLock()
+输入中：ImeProvider.readComposing()  ?? SystemImeProvider.readComposing()
 ```
 
-## NativeImeSys (Kotlin JNA)
+切换按动作选择：
 
-加载 `ime_sys.dll`，通过 JNA 直接调用 CapsLock、前台窗口/进程和 composition 检测接口。
-
-## WeaselServer.exe 通信
-
-```
-WeaselServer.exe /ascii    # 英文
-WeaselServer.exe /nascii   # 中文
+```text
+中英文：ImeProvider.asciiModeSwitcher ?? SystemImeProvider
+大写：  ImeProvider.capsLockSwitcher  ?? SystemImeProvider
 ```
 
-路径检测：用户配置 → 注册表 `HKLM\SOFTWARE\Rime\Weasel` → `WeaselRoot` → 扫描 `C:/Program Files/Rime/weasel-*`
+- 输入法级能力未实现时，使用系统级默认实现。
+- 输入法级状态字段返回不可用时，可以读取系统级状态。
+- 输入法级切换已经接管但执行失败时，必须返回失败，不得再调用系统切换，避免一次动作执行两套语义。
+- 切换完成后必须重新读取实际状态，不能根据目标动作直接修改 UI。
 
-## Rime Lua 桥
+## 多系统扩展
 
-### 部署
+当前只注册 `WindowsSystemImeProvider`，通过 `SystemType` 和 `SystemImeProviderRegistry` 预留 `macOS`、`Linux` 实现。新增操作系统时：
 
-```powershell
-scripts/ime-bridge-install.sh              # 交互安装（WSL）
-scripts/ime-bridge-install.sh -s rime_ice  # 跳过交互（WSL）
-scripts/ime-bridge-install.sh -d PATH      # 自定义路径（WSL）
-scripts/ime-bridge-install.sh -w           # 启动监听（WSL）
-scripts/ime-bridge-install.sh -u           # 卸载（WSL）
-scripts/ime-bridge-install.sh -h           # 帮助（WSL）
+1. 新增独立 `SystemImeProvider`。
+2. 在 IntelliJ 与 VSCode 平台入口注册对应 `SystemType`。
+3. 原生系统调用放入该系统独立模块；Windows Win32 调用继续只允许进入 `ime-sys/`。
+4. 不修改 `ImeGateway`、输入法 Provider、Coordinator、规则或 UI。
+
+## Windows 默认能力
+
+Windows 中英文状态读取链路：
+
+```text
+GetForegroundWindow
+-> ImmGetDefaultIMEWnd
+-> SendMessageTimeout(WM_IME_CONTROL, IMC_GETOPENSTATUS)
+-> SendMessageTimeout(WM_IME_CONTROL, IMC_GETCONVERSIONMODE)
 ```
 
-### 状态文件
+`ime_get_conversion_status()` 返回值：
 
-- 路径: `%TEMP%\ime-state-rime-v2.json`
-- 写入方式: write-tmp-rename 原子写入
-- 协议 v2 字段: `protocol_version`, `provider`, `session_token`, `sequence`, `ascii_mode`, `caps_lock`, `is_composing`, `timestamp`
-- librime-lua 不公开 Weasel/librime 数值 session ID；`session_token` 由每个 Lua `env.engine` 实例生成，表示脚本实际绑定的 Rime Engine/Context 会话。
-- Weasel 0.17.4 不向 librime-lua `Context` 提供客户端应用名，状态写入独立的 v2 文件；`RimeStateWatcher` 只接受完整的协议 v2 状态、`provider=rime` 和同一 token 内递增的 `sequence`，不接受协议 v1。
+- 负数：查询不可用。
+- 低 32 位：IME conversion flags。
+- bit 32：IME open 状态。
+- `IME_CMODE_NATIVE` 为 `1` 是中文，为 `0` 是英文。
+
+转换值 `0` 是合法英文状态，不得当作失败。IME 关闭时统一归一为英文。
+
+系统级中英文切换通过 `IMC_SETOPENSTATUS` 和 `IMC_SETCONVERSIONMODE` 修改并回读 `IME_CMODE_NATIVE`。输入法未实现专用切换时才使用该路径。
+
+composition 使用前台 GUI 线程的实际焦点子窗口查询：
+
+```text
+GetGUIThreadInfo(hwndFocus)
+-> ImmGetContext
+-> ImmGetCompositionStringW(GCS_COMPSTR)
+```
+
+查询不可用时当前 Windows Provider 返回非 composing，不从文件或脚本回退。CapsLock 由 `ime_caps_read()`、`ime_caps_set()` 提供默认实现。
+
+## Rime 能力
+
+Rime Provider 当前只实现输入法级中英文切换：
+
+```text
+WeaselServer.exe /ascii
+WeaselServer.exe /nascii
+```
+
+中英文、大写和 composing 状态以及 CapsLock 切换均未写 Rime 专用服务，默认使用 Windows Provider。
+
+Weasel 路径检测顺序：用户配置 -> 注册表 `HKLM\SOFTWARE\Rime\Weasel` 的 `WeaselRoot` -> 常见 `weasel-*` 安装目录。
+
+## 处理顺序
+
+1. 焦点与前台归属门禁。
+2. `ImeGateway` 读取输入法级可选状态和系统级默认状态。
+3. 归一化中英文、CapsLock、composition。
+4. 检查请求是否过期。
+5. 应用 Vim 模式和上下文规则。
+6. composition 中禁止自动切换。
+7. 再次检查请求、焦点和前台归属。
+8. `ImeGateway` 选择输入法级或系统级切换。
+9. 重新采集实际状态并更新光标和状态栏。
+
+监听器和 UI 不得直接调用 Provider；系统轮询只在编辑器聚焦时运行。
+
+## CapsLock 边界
+
+精确 Normal 模式必须保持小写英文。除该规则外，只有插件从关闭状态主动开启的 CapsLock 才由 `ImeGateway` 释放；窗口失焦或插件停用不得关闭用户手动开启的 CapsLock。每次修改前必须再次确认请求有效、编辑器聚焦且前台窗口属于当前应用。

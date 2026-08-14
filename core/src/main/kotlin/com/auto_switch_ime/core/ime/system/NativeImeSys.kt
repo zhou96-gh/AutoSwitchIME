@@ -1,4 +1,4 @@
-package com.auto_switch_ime.core.ime
+package com.auto_switch_ime.core.ime.system
 
 import com.auto_switch_ime.core.util.Logger
 import com.sun.jna.Library
@@ -16,6 +16,8 @@ object NativeImeSys {
         fun ime_caps_set(on: Int): Int
         fun ime_foreground_window(): Long
         fun ime_foreground_process_id(): Int
+        fun ime_get_conversion_status(): Long
+        fun ime_set_ascii_mode(ascii: Int): Int
         fun ime_is_composing(): Int
     }
 
@@ -37,6 +39,11 @@ object NativeImeSys {
 
     fun imeCapsRead(): Boolean {
         return lib?.ime_caps_read()?.let { it != 0 } ?: false
+    }
+
+    fun imeCapsReadOrNull(): Boolean? {
+        if (!isAvailable()) return null
+        return imeCapsRead()
     }
 
     fun imeCapsToggle(): Boolean {
@@ -63,6 +70,34 @@ object NativeImeSys {
         }
     }
 
+    fun imeGetSystemStatus(): SystemImeStatus? {
+        val packed = try {
+            lib?.ime_get_conversion_status() ?: return null
+        } catch (_: UnsatisfiedLinkError) {
+            return null
+        }
+        return decodeSystemImeStatus(packed)
+    }
+
+    fun imeSetAsciiMode(ascii: Boolean): Boolean {
+        return try {
+            lib?.ime_set_ascii_mode(if (ascii) 1 else 0)?.let { it != 0 } ?: false
+        } catch (_: UnsatisfiedLinkError) {
+            false
+        }
+    }
+
+    internal fun decodeSystemImeStatus(packed: Long): SystemImeStatus? {
+        if (packed < 0) return null
+        val conversionMode = packed and 0xFFFF_FFFFL
+        val isOpen = packed and (1L shl 32) != 0L
+        return SystemImeStatus(
+            isOpen = isOpen,
+            isAsciiMode = !isOpen || conversionMode and 0x01L == 0L,
+            conversionMode = conversionMode
+        )
+    }
+
     private fun extractDll(): String {
         val resource = "/native/ime_sys.dll"
         val dest = File(
@@ -83,3 +118,9 @@ object NativeImeSys {
         return dest.absolutePath
     }
 }
+
+data class SystemImeStatus(
+    val isOpen: Boolean,
+    val isAsciiMode: Boolean,
+    val conversionMode: Long
+)

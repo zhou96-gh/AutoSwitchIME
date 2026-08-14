@@ -17,12 +17,11 @@
 | VSCode native 绑定 (koffi) | 2.0.0 | 替代 child_process/PowerShell |
 | IntelliJ JNA 集成 | 2.0.0 | NativeImeSys → CapsLock 物理读写 |
 | 状态重构 | 2.0.0 | 消除 `currentCapsMode`/`physicalCapsLock` 分裂 |
-| 部署脚本 | 2.0.0 | `scripts/ime-bridge-install.sh`（WSL） |
 | CapsLock 物理读修复 | 2.0.1 | `GetKeyState` → `GetAsyncKeyState`，解决非键盘消息进程误读 |
 | VSCode CapsLock 轮询 | 2.0.1 | 500ms 间隔检测物理 CapsLock 变化，光标颜色实时更新 |
-| CapsLock 状态写入文件 | 2.1.1 | Lua bridge 写入真实 caps_lock，修复 StateWatcher 无法检测手动切换 |
 | 修复 CapsLock 覆盖 bug | 2.1.1 | 移除错误的 modifier 检测，按键名检测不再被覆盖 |
 | 外部程序焦点保护 | 2.2.22 | 系统操作前复查编辑器实时焦点，失焦后丢弃排队请求 |
+| 零外部组件状态采集 | 3.1.0 | 内置 `ime_sys.dll` 通过 Windows 默认 IME 窗口读取中英文状态 |
 
 ## 待完成 🔄
 

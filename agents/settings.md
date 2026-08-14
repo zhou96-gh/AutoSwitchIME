@@ -5,7 +5,7 @@
 ### 实现
 - `AutoSwitchIMESettings : PersistentStateComponent` — 配置持久化，存储 `auto_switch_ime.xml`
 - `AutoSwitchIMESettingsConfigurable : Configurable` — 设置面板
-- 路径: `Settings → Tools → 自动切换输入`
+- 路径: `Settings → Tools → 自动切换输入法`
 
 ### 配置项
 

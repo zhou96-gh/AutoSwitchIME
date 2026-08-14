@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.1.0 - 2026-08-14
+
+### 调整
+
+- 中英文状态改由 `ime_sys.dll` 通过 Windows 默认 IME 窗口和 `WM_IME_CONTROL` 直接读取，不再依赖 Rime Lua 状态桥和临时状态文件。
+- IntelliJ 与 VSCode 只在编辑器焦点和前台窗口校验通过后轮询系统状态，转换值 `0` 按合法英文模式处理。
+- 删除 Lua bridge、部署脚本、状态文件 watcher 和 Lua ZIP 发布产物，插件安装后无需额外组件。
+- 状态与切换调整为 `ImeGateway` 两级能力模型：输入法级按需覆盖，未实现的单项能力使用系统级默认 Provider；系统 Provider 通过 Registry 预留多操作系统实现。
+- Kotlin 与 TypeScript 的 IME 内部目录统一为 `ime/input` 和 `ime/system`，Gateway 固定放在 `ime` 根级。
+- 项目、仓库与发布名称统一为 `AutoSwitchIME`，JetBrains 展示名统一为“自动切换输入法”。
+- VSCode 打包前清理旧的 `out/` 编译目录，避免已删除模块的 JavaScript 残留进入 VSIX。
+
 ## 3.0.1 - 2026-08-13
 
 ### 调整

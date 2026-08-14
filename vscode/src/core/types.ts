@@ -82,47 +82,39 @@ export class VSCodeLogger implements Logger {
   }
 }
 
-/** IME Provider 接口（平台无关） */
+/** 输入法级别可以只提供其中一部分状态。 */
+export interface ImeStateSource {
+  readAsciiMode?(): boolean | null;
+  readCapsLock?(): boolean | null;
+  readComposing?(): boolean | null;
+}
+
+export interface ImeAsciiModeSwitcher {
+  /** false 表示输入法专用切换失败，不再降级到系统级切换。 */
+  switchAsciiMode(
+    ascii: boolean,
+    shouldContinue: () => boolean,
+  ): Promise<boolean>;
+}
+
+export interface ImeCapsLockSwitcher {
+  /** false 表示输入法专用切换失败，不再降级到系统级切换。 */
+  switchCapsLock(
+    enabled: boolean,
+    shouldContinue: () => boolean,
+  ): Promise<boolean>;
+}
+
+/** 输入法专用能力容器；未提供的能力由 ImeGateway 交给系统级 Provider。 */
 export interface ImeProvider {
   readonly type: ImeType;
   readonly name: string;
 
-  onStateChanged?: (state: ImeState) => void;
+  readonly stateSource?: ImeStateSource;
+  readonly asciiModeSwitcher?: ImeAsciiModeSwitcher;
+  readonly capsLockSwitcher?: ImeCapsLockSwitcher;
 
   start(): void;
-
-  /** 切换中英文模式 */
-  setAsciiMode(
-    ascii: boolean,
-    shouldContinue?: () => boolean,
-    forceLowercase?: boolean,
-  ): Promise<void>;
-
-  /** 确保输入法处于英文模式，但不改变 CapsLock。 */
-  ensureAsciiMode(shouldContinue?: () => boolean): Promise<void>;
-
-  /** 切换大写模式 */
-  setCapsMode(shouldContinue?: () => boolean): Promise<void>;
-
-  /** 释放插件自身开启的 CapsLock */
-  releaseOwnedCapsLock(): Promise<void>;
-
-  /** 是否正在输入 */
-  isComposing(): Promise<boolean>;
-
-  /** 获取当前跟踪的 IME 状态 */
-  getTrackedState(): ImeState;
-
-  /** 获取当前实际 IME 状态，检测不可用时回退到跟踪状态。 */
-  getCurrentState(): ImeState;
-
-  /** 主动刷新 Provider 的状态源。 */
-  refreshState(): void;
-
-  /** 同步内部跟踪状态 */
-  syncTrackedState(ascii: boolean, caps: boolean): void;
-
-  /** 释放资源 */
   dispose(): void;
 }
 

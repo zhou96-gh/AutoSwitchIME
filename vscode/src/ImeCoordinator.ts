@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { CoordinatorRequest, CoordinatorState } from './core/CoordinatorState';
 import { EventMailbox } from './core/EventMailbox';
-import { nativeForegroundWindow } from './core/native';
+import { ImeGateway } from './ime/ImeGateway';
+import { nativeForegroundWindow } from './ime/system/native';
 import { evaluateRules } from './core/RuleEvaluator';
 import {
   isNormalLikeMode,
@@ -9,7 +10,7 @@ import {
   resolveNormalModeAction,
   shouldEnforceNormalEnglish,
 } from './core/NormalModePolicy';
-import { ImeAction, ImeProvider, ImeState, Logger, VimMode } from './core/types';
+import { ImeAction, ImeState, Logger, VimMode } from './core/types';
 import { PluginSettings } from './settings';
 import { CaretColorManager } from './ui/CaretColor';
 import { ImeStatusBar } from './ui/StatusBar';
@@ -57,14 +58,14 @@ export class ImeCoordinator {
     : 0n;
 
   constructor(
-    private readonly provider: ImeProvider,
+    private readonly ime: ImeGateway,
     private readonly modeDetector: VimModeDetector,
     private readonly caretColor: CaretColorManager,
     private readonly getStatusBar: () => ImeStatusBar | null,
     private readonly getSettings: () => PluginSettings,
     private readonly logger: Logger,
   ) {
-    this.lastCapsState = provider.getTrackedState().isCapsLock;
+    this.lastCapsState = ime.getTrackedState().isCapsLock;
     this.mailbox = new EventMailbox(
       (event) => this.handleEvent(event),
       (error) => this.logger.warn('IME coordinator event failed', error),
@@ -154,7 +155,7 @@ export class ImeCoordinator {
         kind: 'initialize-editor',
         editor,
         request,
-        state: this.provider.getCurrentState(),
+        state: this.ime.getCurrentState(),
       },
       isPendingEditorEvent,
     );
@@ -190,9 +191,12 @@ export class ImeCoordinator {
     );
   }
 
-  pollCapsLock(): void {
-    if (!this.getSettings().enabled || !vscode.window.state.focused) return;
-    const current = this.provider.getTrackedState().isCapsLock;
+  pollPhysicalState(): void {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !this.isEditorActive(editor)) return;
+
+    this.ime.refreshState();
+    const current = this.ime.getTrackedState().isCapsLock;
     if (current === this.lastCapsState) return;
     this.lastCapsState = current;
     this.mailbox.post(
@@ -252,14 +256,16 @@ export class ImeCoordinator {
     event: Extract<CoordinatorEvent, { kind: 'editor-context' }>,
   ): Promise<void> {
     if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
+    this.ime.refreshState();
+    if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
 
-    const modeBefore = this.provider.getTrackedState().isAsciiMode;
+    const modeBefore = this.ime.getTrackedState().isAsciiMode;
     if (!event.normalLike && !modeBefore) {
-      const composing = await this.provider.isComposing();
+      const composing = this.ime.isComposing();
       if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
       if (composing) {
-        this.logger.debug('Rime is composing, skipping IME switch');
-        this.applyInputState(this.provider.getTrackedState());
+        this.logger.debug('IME is composing, skipping switch');
+        this.applyInputState(this.ime.getTrackedState());
         return;
       }
     }
@@ -275,15 +281,15 @@ export class ImeCoordinator {
       switch (event.action) {
         case ImeAction.CHINESE:
           this.markProgrammaticCapsChangeIfNeeded(false);
-          await this.provider.setAsciiMode(false, isCurrent);
+          await this.ime.setAsciiMode(false, isCurrent);
           break;
         case ImeAction.CAPS:
           this.markProgrammaticCapsChangeIfNeeded(true);
-          await this.provider.setCapsMode(isCurrent);
+          await this.ime.setCapsMode(isCurrent);
           break;
         case ImeAction.ENGLISH:
           this.markProgrammaticCapsChangeIfNeeded(false);
-          await this.provider.setAsciiMode(true, isCurrent, event.strictNormal);
+          await this.ime.setAsciiMode(true, isCurrent, event.strictNormal);
           break;
       }
     }
@@ -292,7 +298,7 @@ export class ImeCoordinator {
     if (event.normalLike) {
       this.normalLikeDefaultsApplied.set(event.editor, true);
     }
-    this.applyInputState(this.provider.getTrackedState());
+    this.applyInputState(this.ime.getTrackedState());
   }
 
   private async handlePhysicalState(state: ImeState): Promise<void> {
@@ -317,7 +323,7 @@ export class ImeCoordinator {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
 
-    this.applyInputState(this.provider.getTrackedState());
+    this.applyInputState(this.ime.getTrackedState());
     if (isNormalLikeMode(this.modeDetector.currentMode, hasSelection(editor))) {
       if (isStrictNormalMode(this.modeDetector.currentMode, hasSelection(editor)) && current) {
         this.requestEditorUpdate(editor);
@@ -327,7 +333,7 @@ export class ImeCoordinator {
 
     if (this.programmaticCapsChange) {
       this.clearProgrammaticCapsChange();
-      const state = this.provider.getTrackedState();
+      const state = this.ime.getTrackedState();
       this.applyInputState(state);
       return;
     }
@@ -337,15 +343,15 @@ export class ImeCoordinator {
       const request = this.state.newRequest(editor);
       if (!request) return;
       const isCurrent = () => this.isCurrent(editor, request);
-      if (!this.provider.getTrackedState().isAsciiMode) {
-        await this.provider.ensureAsciiMode(isCurrent);
+      if (!this.ime.getTrackedState().isAsciiMode) {
+        await this.ime.ensureAsciiMode(isCurrent);
       }
       if (!isCurrent()) return;
-      this.applyInputState(this.provider.getTrackedState());
+      this.applyInputState(this.ime.getTrackedState());
       return;
     }
 
-    this.applyInputState(this.provider.getTrackedState());
+    this.applyInputState(this.ime.getTrackedState());
   }
 
   private isCurrent(
@@ -395,7 +401,7 @@ export class ImeCoordinator {
   }
 
   private markProgrammaticCapsChangeIfNeeded(targetCapsLock: boolean): void {
-    if (this.provider.getTrackedState().isCapsLock === targetCapsLock) return;
+    if (this.ime.getTrackedState().isCapsLock === targetCapsLock) return;
     this.clearProgrammaticCapsChange();
     this.programmaticCapsChange = true;
     this.programmaticCapsChangeTimer = setTimeout(() => {
@@ -413,8 +419,8 @@ export class ImeCoordinator {
   }
 
   private async releaseOwnedCapsLock(): Promise<void> {
-    await this.provider.releaseOwnedCapsLock();
-    this.lastCapsState = this.provider.getTrackedState().isCapsLock;
+    await this.ime.releaseOwnedCapsLock();
+    this.lastCapsState = this.ime.getTrackedState().isCapsLock;
     this.clearProgrammaticCapsChange();
   }
 

@@ -16,7 +16,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.util.Alarm
 import com.auto_switch_ime.caret.CaretColorManager
-import com.auto_switch_ime.core.ime.NativeImeSys
+import com.auto_switch_ime.core.ime.system.NativeImeSys
 import com.auto_switch_ime.ime.AutoSwitchIMEController
 import com.auto_switch_ime.settings.AutoSwitchIMESettings
 import com.auto_switch_ime.util.AutoSwitchIMELogger
@@ -159,7 +159,7 @@ class AutoSwitchIMEPlugin : ProjectActivity {
     }
 
     /**
-     * 更新编辑器状态 — 只需切换输入法，颜色由状态文件回调自动更新
+     * 更新编辑器状态，颜色由系统状态采集事件刷新。
      *
      * 无 IdeaVim 时：按 Insert 模式处理，使用正则规则切换输入法
      * 有 IdeaVim 时：Insert 模式执行规则切换，其他 Vim 模式进入时默认英文并保留原生光标表现

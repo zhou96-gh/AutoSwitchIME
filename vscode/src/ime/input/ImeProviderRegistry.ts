@@ -1,4 +1,4 @@
-import { ImeConfig, ImeProvider, ImeType } from '../core/types';
+import { ImeConfig, ImeProvider, ImeType } from '../../core/types';
 
 type ProviderFactory = (config: ImeConfig) => ImeProvider;
 

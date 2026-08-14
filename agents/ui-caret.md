@@ -23,10 +23,9 @@ object CaretColorManager {
 - Coordinator 在真正调用 WeaselServer、修改 CapsLock 以及更新 UI 前都必须检查请求有效性，避免队列延迟影响其他应用的全局输入法状态
 - 编辑器/窗口失焦时释放插件自己开启的 CapsLock 后
 - 编辑器创建时初始化
-- `ImeStateDetector.getCurrentState()` 检测到手动 IME 切换时更新
+- `ImeGateway` 采集到实际状态变化时更新
 - IntelliJ 编辑器聚焦期间任意按键释放后必须主动读取物理 CapsLock 并刷新颜色；该刷新不得受 Vim 模式限制。
-- 光标模块只能接收监控或 Provider 返回的实际 `ImeState`，不能接收规则产生的目标动作，也不能为了修颜色伪造状态。
-- 选色前必须用物理 CapsLock 读数覆盖传入状态，不能信任状态文件中的 `caps_lock`。
+- 光标模块只能接收 `ImeGateway` 合并两级 Provider 后产生的实际 `ImeState`，不能接收规则产生的目标动作，也不能为了修颜色伪造状态。
 - 光标颜色直接绑定当前实际英文、中文或 CapsLock 状态，不得读取或判断 Vim 模式、规则动作、焦点或启用状态；IdeaVim 只管理光标形状、粗细和厚度。
 
 ## VSCode — CaretColor.ts
@@ -41,9 +40,9 @@ async updateCaretColor(state: ImeState): Promise<void>
 dispose 时恢复原始颜色。
 光标颜色刷新只读取当前实际输入状态，不得读取或判断 Vim 模式、规则动作、焦点或启用状态；Normal、Visual、Insert、Command 等模式只影响输入法切换策略。
 
-### `isCapsLock` 直接来自即时物理读（`nativeCapsRead()`），
-无软件镜像状态，`getTrackedState().isCapsLock === actual physical value`。
-Coordinator 更新状态栏和光标颜色前也必须使用 Provider 产出的实际 state。
+### `isCapsLock`
+
+当前 Rime 没有提供输入法级大写状态，因此由 Windows 系统 Provider 即时读取物理 CapsLock。Coordinator 更新状态栏和光标颜色前必须使用 `ImeGateway` 产出的实际 state。
 
 ## 文件
 

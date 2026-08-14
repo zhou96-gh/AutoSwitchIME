@@ -15,6 +15,8 @@ function loadLib() {
     toggle: dll.func('ime_caps_toggle', 'int', []),
     set: dll.func('ime_caps_set', 'int', ['int']),
     foregroundWindow: tryFunc('ime_foreground_window', 'intptr', []),
+    conversionStatus: tryFunc('ime_get_conversion_status', 'int64', []),
+    setAsciiMode: tryFunc('ime_set_ascii_mode', 'int', ['int']),
     composing: tryFunc('ime_is_composing', 'int', []),
   };
 }
@@ -61,4 +63,32 @@ export function nativeForegroundWindow(): bigint {
 
 export function nativeIsComposing(): number {
   return lib?.composing?.() ?? -1;
+}
+
+export interface SystemImeStatus {
+  isOpen: boolean;
+  isAsciiMode: boolean;
+  conversionMode: number;
+}
+
+export function nativeSystemImeStatus(): SystemImeStatus | null {
+  const value = lib?.conversionStatus?.();
+  if (value === null || value === undefined) return null;
+
+  return decodeSystemImeStatus(typeof value === 'bigint' ? value : BigInt(value));
+}
+
+export function nativeSetAsciiMode(ascii: boolean): boolean {
+  return (lib?.setAsciiMode?.(ascii ? 1 : 0) ?? 0) !== 0;
+}
+
+export function decodeSystemImeStatus(packed: bigint): SystemImeStatus | null {
+  if (packed < 0n) return null;
+  const conversionMode = Number(packed & 0xffff_ffffn);
+  const isOpen = (packed & (1n << 32n)) !== 0n;
+  return {
+    isOpen,
+    isAsciiMode: !isOpen || (conversionMode & 0x01) === 0,
+    conversionMode,
+  };
 }
