@@ -14,11 +14,14 @@ object NativeImeSys {
         fun ime_caps_read(): Int
         fun ime_caps_toggle(): Int
         fun ime_caps_set(on: Int): Int
+        fun ime_caps_message_state(): Int
         fun ime_foreground_window(): Long
         fun ime_foreground_process_id(): Int
         fun ime_get_conversion_status(): Long
         fun ime_set_ascii_mode(ascii: Int): Int
         fun ime_is_composing(): Int
+        fun ime_rime_state_status(): Long
+        fun ime_rime_state_wait(timeoutMillis: Int): Int
     }
 
     private var lib: ImeSysLib? = null
@@ -54,9 +57,22 @@ object NativeImeSys {
         return lib?.ime_caps_set(if (on) 1 else 0)?.let { it != 0 } ?: false
     }
 
+    fun imeCapsMessageStateOrNull(): Boolean? {
+        if (!isAvailable()) return null
+        return lib?.ime_caps_message_state()?.let { it != 0 }
+    }
+
     fun imeForegroundProcessId(): Long {
         return try {
             lib?.ime_foreground_process_id()?.toLong()?.and(0xFFFF_FFFFL) ?: 0L
+        } catch (_: UnsatisfiedLinkError) {
+            0L
+        }
+    }
+
+    fun imeForegroundWindow(): Long {
+        return try {
+            lib?.ime_foreground_window() ?: 0L
         } catch (_: UnsatisfiedLinkError) {
             0L
         }
@@ -87,6 +103,23 @@ object NativeImeSys {
         }
     }
 
+    fun imeGetRimeState(): RimeInputState? {
+        val packed = try {
+            lib?.ime_rime_state_status() ?: return null
+        } catch (_: UnsatisfiedLinkError) {
+            return null
+        }
+        return decodeRimeInputState(packed)
+    }
+
+    fun imeWaitForRimeStateChange(timeoutMillis: Int): Int {
+        return try {
+            lib?.ime_rime_state_wait(timeoutMillis) ?: -1
+        } catch (_: UnsatisfiedLinkError) {
+            -1
+        }
+    }
+
     internal fun decodeSystemImeStatus(packed: Long): SystemImeStatus? {
         if (packed < 0) return null
         val conversionMode = packed and 0xFFFF_FFFFL
@@ -95,6 +128,15 @@ object NativeImeSys {
             isOpen = isOpen,
             isAsciiMode = !isOpen || conversionMode and 0x01L == 0L,
             conversionMode = conversionMode
+        )
+    }
+
+    internal fun decodeRimeInputState(packed: Long): RimeInputState? {
+        if (packed < 0) return null
+        return RimeInputState(
+            isAsciiMode = packed and 0x01L != 0L,
+            isComposing = packed and 0x02L != 0L,
+            eventSequence = packed ushr 2
         )
     }
 
@@ -123,4 +165,10 @@ data class SystemImeStatus(
     val isOpen: Boolean,
     val isAsciiMode: Boolean,
     val conversionMode: Long
+)
+
+data class RimeInputState(
+    val isAsciiMode: Boolean,
+    val isComposing: Boolean,
+    val eventSequence: Long
 )

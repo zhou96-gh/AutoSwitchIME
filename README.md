@@ -12,7 +12,7 @@
 - Insert 模式根据光标两侧内容自动选择中文、大写或英文。
 - 光标两侧同时匹配时优先使用左侧结果。
 - 所有匹配都会忽略数字和空格，它们本身不影响匹配结果。
-- 英文匹配识别英文字母和英文半角标点；大写匹配只额外跳过 `-`、`_`。
+- 英文匹配识别ss英文半角标点；大写匹配只额外跳过 `-`、`_`。
 - 所有模式都通过光标颜色显示当前中文、英文或 CapsLock 输入类型，选色不判断 Vim 模式。
 - 切换前校验编辑器焦点和 Windows 前台窗口，避免排队事件影响外部程序。
 - 除严格 Normal 模式必须关闭 CapsLock 外，只关闭插件自己开启的 CapsLock，不修改用户手动开启的 CapsLock。
@@ -26,6 +26,14 @@
 目前原生模块只支持 Windows x64，小狼毫以外的输入法类型尚未完整实现。
 
 ## 安装
+
+### Rime 状态桥
+
+1. 从 [Releases](https://github.com/zhou96-gh/AutoSwitchIME/releases/latest) 下载并解压 `AutoSwitchIME-Rime-<version>.zip`。
+2. 双击其中的 `install.cmd`，选择当前使用的 Rime 输入方案。
+3. 等待小狼毫重新部署完成。
+
+状态桥把 Rime 的中英文与输入中状态写入 Windows 命名共享内存，并通过 Windows Named Event 通知插件读取，不创建状态文件，也不运行额外服务。IntelliJ 和 VSCode 共用这一组件。
 
 ### JetBrains IDE
 
@@ -47,7 +55,7 @@ code --install-extension .\AutoSwitchIME-VSCode-<version>.vsix
 
 配置入口为 `Settings > Extensions > Auto Switch IME`。
 
-插件内置 `ime_sys.dll`，直接读取当前焦点编辑器的 Windows 系统 IME 转换状态和物理 CapsLock。安装 IntelliJ ZIP 或 VSCode VSIX 后即可使用，不需要部署 Rime Lua、状态文件、Weasel 补丁或额外服务。
+插件内置 `ime_sys.dll`：Rime 状态桥可用时读取真实 `ascii_mode` 与 composition，物理 CapsLock 由 Windows 补齐；Rime 状态桥不可用时插件会暂停，避免使用不可靠的系统中英文值切断中文输入。
 
 ## 模式行为
 
@@ -75,7 +83,7 @@ Insert 模式的中文和大写正则可分别配置光标前、光标后规则�
 | 光标前大写规则 | `insertModeCapsBeforeRegex` | `autoSwitchIME.capsBeforeRegex` |
 | 光标后大写规则 | `insertModeCapsAfterRegex` | `autoSwitchIME.capsAfterRegex` |
 
-当前“切换输入法”只开放 Rime。运行时由 `ImeGateway` 组合系统级默认能力与输入法级可选能力：Rime 只覆盖 Weasel 中英文切换，状态读取和 CapsLock 默认使用 Windows Provider。两级 Registry 分别预留其他操作系统和输入法实现入口。`WeaselServer.exe` 默认从注册表和常见安装目录自动检测；自动检测失败时再手动填写完整路径。
+当前“切换输入法”只开放 Rime。运行时由 `ImeGateway` 组合系统级默认能力与输入法级可选能力：Rime 提供共享内存状态和 Weasel 中英文切换，CapsLock 使用 Windows Provider。输入法没有专用状态源时使用系统级实现；已声明的专用状态源不可用时暂停插件，源恢复后自动恢复。两级 Registry 分别预留其他操作系统和输入法实现入口。`WeaselServer.exe` 默认从注册表和常见安装目录自动检测；自动检测失败时再手动填写完整路径。
 
 恢复全部默认配置：
 
@@ -96,6 +104,7 @@ docker compose run --rm dev ./scripts/build-all.sh
 ```text
 packages/AutoSwitchIME-IntelliJ-<version>.zip
 packages/AutoSwitchIME-VSCode-<version>.vsix
+packages/AutoSwitchIME-Rime-<version>.zip
 ```
 
 运行测试：
@@ -108,7 +117,7 @@ docker compose run --rm --workdir /workspace/vscode dev npm test
 ## 故障排查
 
 - 无法切换输入法：检查 `WeaselServer.exe` 路径，并确认小狼毫正在运行。
-- 手动切换后状态不更新：运行 `ime-watch.exe`，确认编辑器聚焦时 `mode` 会在 `native` 与 `ascii` 之间变化。
+- Rime 状态不更新：保持编辑器在前台，输入一次后运行 Rime ZIP 内的 `diagnose.cmd`，确认 `rime_state` 为 `Some(...)`。
 - IntelliJ：在 `Settings > Tools > 自动切换输入法` 使用“检测配置状态”，必要时开启日志。
 - VSCode：打开输出面板并选择 `Auto Switch IME` 查看日志。
 
@@ -127,6 +136,8 @@ vscode/                     VSCode 扩展
     input/                  输入法级 Provider
     system/                 系统级 Provider 与原生绑定
 ime-sys/                    Windows 原生输入法与 CapsLock 接口
+lua/                        Rime 状态采集脚本
+rime/                       Windows 安装、卸载与诊断入口
 scripts/                    诊断、校验和打包脚本
 ```
 

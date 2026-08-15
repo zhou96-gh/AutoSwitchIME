@@ -27,7 +27,7 @@ IntelliJ 主 JAR 必须包含 40×40 SVG 插件 Logo：`META-INF/pluginIcon.svg`
 - 平时运行测试或重新创建容器不需要重建镜像；只有 `Dockerfile`、`docker-compose.yml` 或基础工具链版本变化时才运行 `docker compose build`。
 - 本项目的开发容器用于测试、构建和打包，默认按 `docker compose run --rm dev ...` 临时容器使用；不作为常驻服务接入 Supervisor。
 - “清理容器垃圾”默认只清理本项目临时容器、无用网络和 Docker build cache，例如 `docker compose down --remove-orphans`、`docker builder prune -f`。
-- 未经明确要求，不删除 `rimevim-dev:latest` 镜像、`rimevimime_*` 依赖缓存 volume、`vscode/node_modules/`、`ime-sys/target/`、`packages/` 等可复用依赖缓存或产物。
+- 未经明确要求，不删除 `rimevim-dev:latest` 镜像、`rimevimime_*` 依赖缓存 volume、`vscode/node_modules/`、`ime-sys/target/` 等可复用依赖缓存；`packages/` 不适用此规则，完整打包前必须清理历史安装包。
 - 只有用户明确要求“全清/重新下载依赖/删除镜像或 volume”时，才删除镜像、volume 或工作区构建产物。
 
 ### 版本要求
@@ -90,24 +90,25 @@ ime-sys/target/x86_64-pc-windows-gnu/release/
 
 ### 发布产物
 
-每个正式 Release 必须同时上传以下两个附件，文件名中的版本必须与插件元数据一致：
+每个正式 Release 必须同时上传以下三个附件，文件名中的版本必须与插件元数据一致：
 
 - `packages/AutoSwitchIME-IntelliJ-<version>.zip`
 - `packages/AutoSwitchIME-VSCode-<version>.vsix`
+- `packages/AutoSwitchIME-Rime-<version>.zip`
 
 ### 发布顺序
 
 1. 根据改动类型升级版本，并同步全部版本源和 `CHANGELOG.md`。
-2. 清理 `packages/` 中本次版本的同名残留，运行 `scripts/build-all.sh` 生成两个附件；重新发布时保留上一版本产物直至新 Release 验证成功。
-3. 运行版本一致性、IntelliJ 插件和 VSCode 扩展检查，并记录两个附件的 SHA-256。
+2. 清理 `packages/` 中全部历史安装包，运行 `scripts/build-all.sh` 生成三个附件；目录中只保留本次版本的 IntelliJ ZIP、VSCode VSIX 和 Rime ZIP。
+3. 运行版本一致性、IntelliJ 插件、VSCode 扩展和 Rime 状态桥检查，并记录三个附件的 SHA-256。
 4. 在 `develop` 提交并推送发布变更，创建以 `master` 为目标分支的 PR；验证 PR 内容后合入 `master`。
 5. 确认远端 `master` 指向发布提交，再创建带注释的 `v<version>` 标签并推送该标签。
-6. 创建非草稿、非预发布的 GitHub Release，上传两个附件，并在正文中写明主要变更、安装入口和 SHA-256。
+6. 创建非草稿、非预发布的 GitHub Release，上传三个附件，并在正文中写明主要变更、安装入口和 SHA-256。
 7. 回读 Release，确认标签目标、附件名称、附件大小和下载地址均正确后，才算发布成功。
 8. 将发布后的 `master` 同步回 `develop` 并推送，保留本地和远端 `develop` 供下一版本继续开发。
 
 ### 重新发布与清理
 
 - 已公开版本发现产物遗漏或打包错误时必须升级 patch 版本重新发布，不覆盖或复用原标签。
-- 只有新 Release 完整发布并回读验证成功后，才可删除用户明确指定的旧 Release、对应远端和本地标签以及 `packages/` 中的旧版本产物。
-- 删除前必须再次核对旧版本号和目标 Release；不得清理未明确指定的历史版本。
+- 本地 `packages/` 不保留旧版本产物；`scripts/build-all.sh` 每次执行时必须先清空已有的项目安装包。
+- 远端旧 Release 及其标签不随本地包清理自动删除；只有用户明确指定时才能删除，删除前必须再次核对旧版本号和目标 Release。

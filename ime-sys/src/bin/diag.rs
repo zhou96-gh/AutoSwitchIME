@@ -2,6 +2,7 @@ fn main() {
     let raw = ime_sys::ime_get_conversion_status();
     let caps = ime_sys::ime_caps_read() != 0;
     let composing = ime_sys::ime_is_composing();
+    let rime_raw = ime_sys::ime_rime_state_status();
 
     println!("=== AutoSwitchIME system IME diagnostic ===");
     match ime_sys::decode_conversion_status(raw) {
@@ -18,4 +19,9 @@ fn main() {
     }
     println!("caps_lock: {}", caps);
     println!("is_composing: {}", composing);
+    println!("rime_state_raw: {}", rime_raw);
+    println!(
+        "rime_state: {:?}",
+        ime_sys::decode_rime_state_status(rime_raw)
+    );
 }

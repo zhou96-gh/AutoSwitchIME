@@ -136,6 +136,8 @@ export class ImeCoordinator {
 
   initializeEditor(editor: vscode.TextEditor): void {
     if (!this.isEditorActive(editor)) return;
+    this.ime.refreshState();
+    if (!this.ime.isStateSourceAvailable()) return;
 
     this.normalLikeDefaultsApplied.delete(editor);
     this.state.focusEditor(editor);
@@ -257,6 +259,7 @@ export class ImeCoordinator {
   ): Promise<void> {
     if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
     this.ime.refreshState();
+    if (!this.ime.isStateSourceAvailable()) return;
     if (!this.isCurrent(event.editor, event.request, event.foregroundWindow)) return;
 
     const modeBefore = this.ime.getTrackedState().isAsciiMode;

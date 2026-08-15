@@ -4,10 +4,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   ImeAsciiModeSwitcher,
+  ImePartialState,
   ImeProvider,
+  ImeStateSource,
   ImeType,
   Logger,
 } from '../../core/types';
+import { nativeRimeInputState, nativeWaitForRimeStateChange } from '../system/native';
 
 const execFileAsync = promisify(execFile);
 const SEARCH_BASE_DIRS = [
@@ -73,14 +76,16 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-/** Rime 只覆盖 Weasel 中英文切换，其余能力由 ImeGateway 使用系统级默认实现。 */
-export class RimeImeProvider implements ImeProvider, ImeAsciiModeSwitcher {
+/** Rime 通过 Lua 共享内存提供中英文/输入中状态，并使用 Weasel 指令切换中英文。 */
+export class RimeImeProvider implements ImeProvider, ImeAsciiModeSwitcher, ImeStateSource {
   readonly type = ImeType.RIME;
   readonly name = 'Rime/Weasel';
   readonly asciiModeSwitcher = this;
+  readonly stateSource = this;
 
   private weaselServerPath: string | null;
   private warnedMissing = false;
+  private stateAvailable = false;
 
   constructor(
     private logger: Logger,
@@ -94,11 +99,39 @@ export class RimeImeProvider implements ImeProvider, ImeAsciiModeSwitcher {
   start(): void {
   }
 
+  readState(): ImePartialState {
+    const actual = nativeRimeInputState();
+    this.stateAvailable = actual != null;
+    return actual == null ? {} : {
+      isAsciiMode: actual.isAsciiMode,
+      isComposing: actual.isComposing,
+    };
+  }
+
+  isAvailable(): boolean {
+    return this.stateAvailable;
+  }
+
+  supportsChangeNotifications(): boolean {
+    return true;
+  }
+
+  async waitForStateChange(timeoutMillis: number): Promise<boolean> {
+    const result = await nativeWaitForRimeStateChange(timeoutMillis);
+    if (result < 0) {
+      await new Promise((resolve) => setTimeout(resolve, timeoutMillis));
+    }
+    return result > 0;
+  }
+
   async switchAsciiMode(
     ascii: boolean,
     shouldContinue: () => boolean = () => true,
   ): Promise<boolean> {
-    return this.switchImeMode(ascii ? '/ascii' : '/nascii', shouldContinue);
+    return this.switchImeMode(
+      ascii ? '/ascii' : '/nascii',
+      shouldContinue,
+    );
   }
 
   dispose(): void {

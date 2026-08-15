@@ -1,5 +1,60 @@
 # Changelog
 
+## 3.2.5 - 2026-08-15
+
+### 修复
+
+- 光标状态与切换动作彻底解耦：删除 IntelliJ 与 VSCode 的 Rime 目标确认状态，`/ascii`、`/nascii` 成功后等待共享内存实际回报再更新光标。
+- CapsLock 注入不再把目标值写入原生跟踪器；IntelliJ 在键盘消息完成后从 EDT 读取 Windows 真实 toggle 位，再通过 Gateway 更新光标与 Normal 锁定。
+
+## 3.2.4 - 2026-08-15
+
+### 修复
+
+- 重写 Windows CapsLock 设置契约：关闭成功明确返回成功状态，每次动作只注入一次完整按键，不再根据未同步的线程键盘缓存重复注入，修复插件显示已处理但系统大写实际保持不变的问题。
+- IntelliJ 恢复经过真实交互验证的按键释放后 100ms 单次刷新，等待 Windows 完成 CapsLock 物理转换再执行 Normal 锁定；该机制由按键事件触发，不恢复轮询。
+- Normal 关闭 CapsLock 失败时记录明确警告，避免效果链静默中断。
+
+## 3.2.3 - 2026-08-15
+
+### 修复
+
+- IntelliJ 处理物理输入状态变化时实时读取 IdeaVim 模式，不再依赖编辑器的 strict Normal 缓存，修复 CapsLock 状态已更新光标但未生成关闭大写动作的问题。
+
+## 3.2.2 - 2026-08-15
+
+### 修复
+
+- IntelliJ 使用 Rime 状态通知时，按键释放仍会即时采集 Windows 物理 CapsLock，修复精确 Normal 模式下手动开启大写后未恢复小写英文的问题；Rime 中英文继续使用事件通知，不恢复状态轮询。
+
+## 3.2.1 - 2026-08-14
+
+### 修复
+
+- Rime 已声明专用状态源但共享内存不可用时，IntelliJ 与 VSCode 运行时暂停规则切换、Normal 锁定和光标更新，不再回退不可靠的系统中英文值打断中文 composition；状态源恢复后自动恢复。
+- Rime 状态变化通过 Windows Named Event 通知插件读取最新共享内存，支持手动与自动切换统一更新光标和 Normal 锁定；仅不支持通知的系统级实现保留焦点内轮询。
+- Rime 安装器升级时先通过 `WeaselServer.exe /quit` 释放已加载 DLL，再使用 `WeaselDeployer.exe /deploy` 并检查退出码，修复 DLL 无法覆盖以及安装显示成功但 schema 仍加载旧 Lua processor 的问题。
+
+## 3.2.0 - 2026-08-14
+
+### 功能
+
+- 恢复 Rime Lua 状态采集，通过 Windows 命名共享内存直接提供中英文与 composition 状态，不再读写临时状态文件，也不需要常驻服务。
+- `ime_sys.dll` 同时提供 Rime Lua 写入入口和 IntelliJ/VSCode 读取入口；状态包含前台窗口、进程和事件序号，插件拒绝其他窗口及已退出 Weasel 进程留下的数据。
+- 新增独立 Rime 部署包，提供双击安装、卸载和诊断入口；安装器会备份方案配置与旧 Lua 桥，再触发小狼毫重新部署。
+
+### 调整
+
+- Rime Provider 按一次快照读取中英文和 composition，CapsLock 继续由 Windows Provider 补齐；其他输入法未提供专用状态服务时仍回退系统级能力。
+- Weasel 切换成功后的短暂确认状态收敛到 Rime Provider，并由共享内存事件序号结束确认，避免系统 conversion 状态覆盖实际输出。
+
+## 3.1.1 - 2026-08-14
+
+### 修复
+
+- 精确 Normal 模式始终执行输入法级英文切换，不再因 Windows conversion 状态已经是英文而跳过 Weasel `/ascii`。
+- 输入法没有状态查询能力时，使用最近一次成功切换确认中英文状态，修复 Weasel 实际输出与光标颜色不一致的问题；系统状态之后真实变化时仍会恢复跟随。
+
 ## 3.1.0 - 2026-08-14
 
 ### 调整

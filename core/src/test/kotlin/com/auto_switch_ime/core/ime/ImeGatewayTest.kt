@@ -44,6 +44,16 @@ class ImeGatewayTest {
     }
 
     @Test
+    fun `observed CapsLock state overrides background system reading`() {
+        val system = FakeSystem(ascii = true, caps = true)
+        val gateway = ImeGateway(FakeProvider(), system, FakeLogger)
+
+        gateway.refreshState(observedCapsLock = false)
+
+        assertFalse(gateway.getTrackedState().isCapsLock)
+    }
+
+    @Test
     fun `missing input method switcher falls back to system switcher`() {
         val system = FakeSystem(ascii = false)
         val gateway = ImeGateway(FakeProvider(), system, FakeLogger)
@@ -69,6 +79,114 @@ class ImeGatewayTest {
     }
 
     @Test
+    fun `forced ASCII mode invokes input method switcher when system state is already ASCII`() {
+        val switcher = FakeAsciiSwitcher(succeeds = true)
+        val system = FakeSystem(ascii = true)
+        val gateway = ImeGateway(FakeProvider(switcher = switcher), system, FakeLogger)
+        gateway.refreshState()
+
+        runSuspend { gateway.setAsciiMode(true, forceAsciiMode = true) }
+
+        assertEquals(1, switcher.callCount)
+        assertEquals(0, system.asciiSwitchCount)
+    }
+
+    @Test
+    fun `forced ASCII mode disables manual CapsLock before switching input method`() {
+        val switcher = FakeAsciiSwitcher(succeeds = true)
+        val system = FakeSystem(ascii = true, caps = true)
+        val gateway = ImeGateway(FakeProvider(switcher = switcher), system, FakeLogger)
+        gateway.refreshState()
+
+        runSuspend { gateway.setAsciiMode(true, forceAsciiMode = true) }
+
+        assertFalse(gateway.getTrackedState().isCapsLock)
+        assertEquals(1, system.capsSwitchCount)
+        assertEquals(1, switcher.callCount)
+    }
+
+    @Test
+    fun `first input method action runs when provider state has not been observed`() {
+        val switcher = FakeAsciiSwitcher(succeeds = true)
+        val system = FakeSystem(ascii = true)
+        val gateway = ImeGateway(FakeProvider(switcher = switcher), system, FakeLogger)
+        gateway.refreshState()
+
+        runSuspend { gateway.setAsciiMode(true) }
+
+        assertEquals(1, switcher.callCount)
+        assertTrue(gateway.getTrackedState().isAsciiMode)
+    }
+
+    @Test
+    fun `input method state source remains authoritative when system state disagrees`() {
+        var providerAscii = true
+        val source = object : ImeStateSource {
+            override fun readAsciiMode(): Boolean = providerAscii
+        }
+        val switcher = object : ImeAsciiModeSwitcher {
+            var callCount = 0
+
+            override suspend fun switchAsciiMode(
+                ascii: Boolean,
+                shouldContinue: () -> Boolean
+            ): Boolean {
+                callCount++
+                if (!shouldContinue()) return false
+                providerAscii = ascii
+                return true
+            }
+        }
+        val system = FakeSystem(ascii = true)
+        val gateway = ImeGateway(
+            FakeProvider(stateSource = source, switcher = switcher),
+            system,
+            FakeLogger
+        )
+        gateway.refreshState()
+
+        runSuspend { gateway.setAsciiMode(false) }
+        gateway.refreshState()
+
+        assertFalse(gateway.getTrackedState().isAsciiMode)
+        assertEquals(1, switcher.callCount)
+        assertEquals(0, system.asciiSwitchCount)
+    }
+
+    @Test
+    fun `successful switch command does not replace observed input method state`() {
+        val source = object : ImeStateSource {
+            override fun readAsciiMode(): Boolean = false
+        }
+        val switcher = FakeAsciiSwitcher(succeeds = true)
+        val gateway = ImeGateway(
+            FakeProvider(stateSource = source, switcher = switcher),
+            FakeSystem(ascii = true),
+            FakeLogger
+        )
+        gateway.refreshState()
+
+        runSuspend { gateway.setAsciiMode(true) }
+
+        assertFalse(gateway.getTrackedState().isAsciiMode)
+        assertEquals(1, switcher.callCount)
+    }
+
+    @Test
+    fun `system change updates tracked input method state`() {
+        val switcher = FakeAsciiSwitcher(succeeds = true)
+        val system = FakeSystem(ascii = true)
+        val gateway = ImeGateway(FakeProvider(switcher = switcher), system, FakeLogger)
+        gateway.refreshState()
+        runSuspend { gateway.setAsciiMode(true) }
+
+        system.setAsciiState(false)
+        gateway.refreshState()
+
+        assertFalse(gateway.getTrackedState().isAsciiMode)
+    }
+
+    @Test
     fun `failed input method switch does not fall back to system switcher`() {
         val switcher = FakeAsciiSwitcher(succeeds = false)
         val system = FakeSystem(ascii = false)
@@ -80,6 +198,35 @@ class ImeGatewayTest {
         assertEquals(1, switcher.callCount)
         assertEquals(0, system.asciiSwitchCount)
         assertFalse(gateway.getTrackedState().isAsciiMode)
+    }
+
+    @Test
+    fun `declared unavailable state source suspends actions until it recovers`() {
+        var available = false
+        val source = object : ImeStateSource {
+            override fun isAvailable(): Boolean = available
+            override fun readAsciiMode(): Boolean = false
+            override fun readComposing(): Boolean = false
+        }
+        val switcher = FakeAsciiSwitcher(succeeds = true)
+        val gateway = ImeGateway(
+            FakeProvider(stateSource = source, switcher = switcher),
+            FakeSystem(ascii = true),
+            FakeLogger
+        )
+
+        gateway.start()
+        runSuspend { gateway.setAsciiMode(false) }
+
+        assertFalse(gateway.isStateSourceAvailable())
+        assertEquals(0, switcher.callCount)
+
+        available = true
+        gateway.refreshState()
+        runSuspend { gateway.setAsciiMode(true) }
+
+        assertTrue(gateway.isStateSourceAvailable())
+        assertEquals(1, switcher.callCount)
     }
 
     @Test
@@ -127,10 +274,15 @@ class ImeGatewayTest {
     ) : SystemImeProvider {
         override val type = SystemType.WINDOWS
         var asciiSwitchCount = 0
+        var capsSwitchCount = 0
 
         override fun readAsciiMode(): Boolean = ascii
         override fun readCapsLock(): Boolean = caps
         override fun readComposing(): Boolean = composing
+
+        fun setAsciiState(ascii: Boolean) {
+            this.ascii = ascii
+        }
 
         override suspend fun switchAsciiMode(
             ascii: Boolean,
@@ -146,6 +298,7 @@ class ImeGatewayTest {
             enabled: Boolean,
             shouldContinue: () -> Boolean
         ): Boolean {
+            capsSwitchCount++
             if (!shouldContinue()) return false
             caps = enabled
             return true

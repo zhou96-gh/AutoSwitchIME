@@ -83,7 +83,18 @@ export class VSCodeLogger implements Logger {
 }
 
 /** 输入法级别可以只提供其中一部分状态。 */
+export interface ImePartialState {
+  isAsciiMode?: boolean | null;
+  isCapsLock?: boolean | null;
+  isComposing?: boolean | null;
+}
+
 export interface ImeStateSource {
+  /** A declared input-method source suspends the plugin while unavailable. */
+  isAvailable?(): boolean;
+  supportsChangeNotifications?(): boolean;
+  waitForStateChange?(timeoutMillis: number): Promise<boolean>;
+  readState?(): ImePartialState;
   readAsciiMode?(): boolean | null;
   readCapsLock?(): boolean | null;
   readComposing?(): boolean | null;

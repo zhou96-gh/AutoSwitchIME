@@ -1,7 +1,10 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { decodeSystemImeStatus } = require('../out/ime/system/native');
+const {
+  decodeRimeInputState,
+  decodeSystemImeStatus,
+} = require('../out/ime/system/native');
 
 test('zero conversion mode is valid ascii state', () => {
   assert.deepEqual(decodeSystemImeStatus(0n), {
@@ -29,4 +32,16 @@ test('closed ime maps native flags to ascii input', () => {
 
 test('negative status is unavailable', () => {
   assert.equal(decodeSystemImeStatus(-1n), null);
+});
+
+test('rime state decodes flags and event sequence', () => {
+  assert.deepEqual(decodeRimeInputState((17n << 2n) | 3n), {
+    isAsciiMode: true,
+    isComposing: true,
+    eventSequence: 17n,
+  });
+});
+
+test('negative rime state is unavailable', () => {
+  assert.equal(decodeRimeInputState(-1n), null);
 });

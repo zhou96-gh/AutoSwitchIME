@@ -1,11 +1,13 @@
 package com.auto_switch_ime.core.ime
 
-import com.auto_switch_ime.core.ImeAsciiModeSwitcher
 import com.auto_switch_ime.core.ImeCapsLockSwitcher
 import com.auto_switch_ime.core.ImeProvider
 import com.auto_switch_ime.core.ImeState
 import com.auto_switch_ime.core.ime.system.SystemImeProvider
 import com.auto_switch_ime.core.util.Logger
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 合并输入法级可选能力与系统级默认能力，并维护统一 ImeState。
@@ -21,31 +23,59 @@ class ImeGateway(
     @Volatile
     private var ownsCapsLock = false
 
+    @Volatile
+    private var stateSourceAvailable = provider.stateSource == null
+
+    private var availabilityKnown = provider.stateSource == null
+
     private var lastPublishedState: ImeState? = null
+
+    private val watchingStateChanges = AtomicBoolean(false)
+    private val stateChangeExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "AutoSwitchIME-StateSource").apply { isDaemon = true }
+    }
 
     var onStateChanged: ((ImeState) -> Unit)? = null
 
+    var onStateSourceAvailabilityChanged: ((Boolean) -> Unit)? = null
+
+    /** 原生通知只唤醒平台层；平台完成焦点门禁后再调用 refreshState。 */
+    var onStateChangeSignal: (() -> Unit)? = null
+
     fun start() {
         provider.start()
+        startStateChangeWatcher()
     }
 
     fun getTrackedState(): ImeState = trackedState
 
-    fun getCurrentState(): ImeState {
-        refreshState()
+    fun isStateSourceAvailable(): Boolean = stateSourceAvailable
+
+    fun supportsStateChangeNotifications(): Boolean {
+        return provider.stateSource?.supportsChangeNotifications() == true
+    }
+
+    fun getCurrentState(observedCapsLock: Boolean? = null): ImeState {
+        refreshState(observedCapsLock)
         return trackedState
     }
 
-    fun refreshState() {
-        val specific = provider.stateSource
+    fun refreshState(observedCapsLock: Boolean? = null) {
+        val source = provider.stateSource
+        val specific = source?.readState()
+        updateStateSourceAvailability(source?.isAvailable() ?: true)
+        if (!stateSourceAvailable) return
+
+        val systemAsciiMode = system.readAsciiMode()
         trackedState = ImeState(
-            isAsciiMode = specific?.readAsciiMode()
-                ?: system.readAsciiMode()
+            isAsciiMode = specific?.isAsciiMode
+                ?: systemAsciiMode
                 ?: trackedState.isAsciiMode,
-            isCapsLock = specific?.readCapsLock()
+            isCapsLock = specific?.isCapsLock
+                ?: observedCapsLock
                 ?: system.readCapsLock()
                 ?: trackedState.isCapsLock,
-            isComposing = specific?.readComposing()
+            isComposing = specific?.isComposing
                 ?: system.readComposing()
                 ?: false
         )
@@ -53,7 +83,8 @@ class ImeGateway(
     }
 
     fun isComposing(): Boolean {
-        val composing = provider.stateSource?.readComposing()
+        if (!stateSourceAvailable) return false
+        val composing = provider.stateSource?.readState()?.isComposing
             ?: system.readComposing()
             ?: false
         trackedState = trackedState.copy(isComposing = composing)
@@ -64,17 +95,24 @@ class ImeGateway(
     suspend fun setAsciiMode(
         ascii: Boolean,
         shouldContinue: () -> Boolean = { true },
-        forceLowercase: Boolean = false
+        forceAsciiMode: Boolean = false
     ) {
-        if (!shouldContinue()) return
-        if (trackedState.isCapsLock && (ownsCapsLock || forceLowercase)) {
-            if (!switchCapsLock(false, shouldContinue)) return
+        if (!stateSourceAvailable || !shouldContinue()) return
+        if (trackedState.isCapsLock && (ownsCapsLock || forceAsciiMode)) {
+            if (!switchCapsLock(false, shouldContinue)) {
+                logger.warn("${provider.name} failed to disable CapsLock")
+                return
+            }
+            logger.info("${provider.name} disabled CapsLock")
             ownsCapsLock = false
             refreshState()
         }
 
-        if (trackedState.isAsciiMode != ascii) {
-            val switched = asciiSwitcher().switchAsciiMode(ascii, shouldContinue)
+        val shouldSwitch = trackedState.isAsciiMode != ascii ||
+            forceAsciiMode ||
+            hasUnobservedProviderAsciiState()
+        if (shouldSwitch) {
+            val switched = switchAsciiMode(ascii, shouldContinue)
             if (!switched) {
                 logger.warn("${provider.name} failed to switch ASCII mode to $ascii")
                 return
@@ -84,9 +122,9 @@ class ImeGateway(
     }
 
     suspend fun ensureAsciiMode(shouldContinue: () -> Boolean = { true }) {
-        if (!shouldContinue()) return
-        if (!trackedState.isAsciiMode) {
-            val switched = asciiSwitcher().switchAsciiMode(true, shouldContinue)
+        if (!stateSourceAvailable || !shouldContinue()) return
+        if (!trackedState.isAsciiMode || hasUnobservedProviderAsciiState()) {
+            val switched = switchAsciiMode(true, shouldContinue)
             if (!switched) {
                 logger.warn("${provider.name} failed to ensure ASCII mode")
                 return
@@ -96,11 +134,11 @@ class ImeGateway(
     }
 
     suspend fun setCapsMode(shouldContinue: () -> Boolean = { true }) {
-        if (!shouldContinue()) return
+        if (!stateSourceAvailable || !shouldContinue()) return
         if (trackedState.isAsciiMode && trackedState.isCapsLock) return
 
-        if (!trackedState.isAsciiMode) {
-            val switched = asciiSwitcher().switchAsciiMode(true, shouldContinue)
+        if (!trackedState.isAsciiMode || hasUnobservedProviderAsciiState()) {
+            val switched = switchAsciiMode(true, shouldContinue)
             if (!switched) {
                 logger.warn("${provider.name} failed to enter ASCII mode before CapsLock")
                 return
@@ -129,11 +167,26 @@ class ImeGateway(
     }
 
     fun dispose() {
+        watchingStateChanges.set(false)
+        stateChangeExecutor.shutdownNow()
+        try {
+            stateChangeExecutor.awaitTermination(2, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
         provider.dispose()
     }
 
-    private fun asciiSwitcher(): ImeAsciiModeSwitcher {
-        return provider.asciiModeSwitcher ?: system
+    private fun hasUnobservedProviderAsciiState(): Boolean {
+        return provider.asciiModeSwitcher != null &&
+            provider.stateSource?.readState()?.isAsciiMode == null
+    }
+
+    private suspend fun switchAsciiMode(
+        ascii: Boolean,
+        shouldContinue: () -> Boolean
+    ): Boolean {
+        return (provider.asciiModeSwitcher ?: system).switchAsciiMode(ascii, shouldContinue)
     }
 
     private fun capsLockSwitcher(): ImeCapsLockSwitcher {
@@ -148,8 +201,37 @@ class ImeGateway(
     }
 
     private fun publishState() {
+        if (!stateSourceAvailable) return
         if (trackedState == lastPublishedState) return
         lastPublishedState = trackedState
         onStateChanged?.invoke(trackedState)
+    }
+
+    private fun updateStateSourceAvailability(available: Boolean) {
+        if (availabilityKnown && stateSourceAvailable == available) return
+        availabilityKnown = true
+        stateSourceAvailable = available
+        if (available) {
+            logger.info("${provider.name} state source available; AutoSwitchIME resumed")
+        } else {
+            logger.warn("${provider.name} state source unavailable; AutoSwitchIME suspended")
+        }
+        onStateSourceAvailabilityChanged?.invoke(available)
+    }
+
+    private fun startStateChangeWatcher() {
+        val source = provider.stateSource ?: return
+        if (!source.supportsChangeNotifications() || !watchingStateChanges.compareAndSet(false, true)) {
+            return
+        }
+        stateChangeExecutor.execute {
+            while (watchingStateChanges.get()) {
+                val changed = source.waitForStateChange(1000)
+                if (!watchingStateChanges.get()) break
+                if (changed || !stateSourceAvailable) {
+                    onStateChangeSignal?.invoke()
+                }
+            }
+        }
     }
 }
