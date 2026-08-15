@@ -45,6 +45,13 @@ dispose 时恢复原始颜色。
 
 当前 Rime 没有提供输入法级大写状态，因此由 Windows 系统 Provider 即时读取物理 CapsLock。Coordinator 更新状态栏和光标颜色前必须使用 `ImeGateway` 产出的实际 state。
 
+### VSCode 状态栏
+
+- AutoSwitchIME 只显示一个输入状态项，不重复显示 VSCodeVim 已有的 Vim 模式。
+- 实际状态明确显示为“中文”“英文”或“大写”；状态源尚未完成首次回读时显示“IME 等待”。
+- 专用状态源不可用时显示“IME 暂停”及原因 tooltip，不因焦点切换、状态尚未上报或外部组件配置问题弹窗；状态恢复后自动显示 `ImeGateway` 回读的实际状态。
+- 状态栏不得根据规则动作、切换命令结果或 Vim 模式伪造输入状态。
+
 ## 文件
 
 | 平台 | 路径 |

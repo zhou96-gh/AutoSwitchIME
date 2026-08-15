@@ -90,7 +90,6 @@ export class RimeImeProvider implements ImeProvider, ImeAsciiModeSwitcher, ImeSt
   constructor(
     private logger: Logger,
     weaselPath?: string,
-    private showWarning?: (msg: string) => void,
   ) {
     this.weaselServerPath = weaselPath ?? detectWeaselServer(logger);
     this.logger.info(`WeaselServer path: ${this.weaselServerPath ?? '(not found)'}`);
@@ -147,7 +146,6 @@ export class RimeImeProvider implements ImeProvider, ImeAsciiModeSwitcher, ImeSt
         this.warnedMissing = true;
         const msg = 'WeaselServer.exe 未找到，请检查 autoSwitchIME.weaselServerPath 设置';
         this.logger.warn(msg);
-        this.showWarning?.(msg);
       }
       return false;
     }
