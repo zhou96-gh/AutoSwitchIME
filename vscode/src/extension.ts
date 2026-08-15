@@ -10,7 +10,7 @@ import {
   SystemType,
   WindowsSystemImeProvider,
 } from './ime/system/SystemImeProvider';
-import { ImeType, VSCodeLogger, VimMode } from './core/types';
+import { ImeType, VSCodeLogger } from './core/types';
 import { VimModeDetector } from './vim/VimModeDetector';
 import { CaretColorManager } from './ui/CaretColor';
 import { ImeStatusBar } from './ui/StatusBar';
@@ -32,9 +32,10 @@ let settings: PluginSettings;
 let disposables: vscode.Disposable[] = [];
 let caretDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let physicalStatePollTimer: ReturnType<typeof setInterval> | null = null;
-let stateSourceWarningVisible = false;
+let stateSourceAvailability: boolean | null = null;
 
 export function activate(context: vscode.ExtensionContext): void {
+  stateSourceAvailability = null;
   outputChannel = vscode.window.createOutputChannel('Auto Switch IME');
   logger = new VSCodeLogger(outputChannel);
   logger.info('AutoSwitchIME VSCode extension starting...');
@@ -65,7 +66,6 @@ export function activate(context: vscode.ExtensionContext): void {
   providers.register(ImeType.RIME, (config) => new RimeImeProvider(
       logger,
       config.weaselServerPath,
-      (msg) => vscode.window.showWarningMessage(msg),
     ));
   const provider = providers.create(settings.imeConfig);
   const systems = new SystemImeProviderRegistry();
@@ -79,7 +79,7 @@ export function activate(context: vscode.ExtensionContext): void {
     settings.capsCaretColor,
   );
   if (settings.showStatusBar) {
-    statusBar = new ImeStatusBar();
+    statusBar = createStatusBar();
   }
 
   modeDetector = new VimModeDetector();
@@ -107,7 +107,7 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar.dispose();
         statusBar = null;
       } else if (!statusBar && settings.showStatusBar) {
-        statusBar = new ImeStatusBar();
+        statusBar = createStatusBar();
       }
     }),
   );
@@ -184,8 +184,7 @@ function setupEditorListeners(): void {
   );
 }
 
-async function onVimModeChanged(mode: VimMode): Promise<void> {
-  statusBar?.updateVimMode(mode);
+async function onVimModeChanged(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (editor && settings.enabled && vscode.window.state.focused) {
     coordinator?.requestEditorUpdate(editor);
@@ -193,13 +192,17 @@ async function onVimModeChanged(mode: VimMode): Promise<void> {
 }
 
 function onStateSourceAvailabilityChanged(available: boolean): void {
-  if (available) {
-    stateSourceWarningVisible = false;
-    return;
+  stateSourceAvailability = available;
+  statusBar?.updateStateSourceAvailability(available);
+}
+
+function createStatusBar(): ImeStatusBar {
+  const item = new ImeStatusBar();
+  if (stateSourceAvailability !== null) {
+    item.updateStateSourceAvailability(stateSourceAvailability);
+    if (stateSourceAvailability) {
+      item.updateImeState(imeGateway.getTrackedState());
+    }
   }
-  if (stateSourceWarningVisible) return;
-  stateSourceWarningVisible = true;
-  void vscode.window.showWarningMessage(
-    'AutoSwitchIME 已暂停：当前输入法状态源不可用。请部署或重新部署对应的输入法状态组件。',
-  );
+  return item;
 }
