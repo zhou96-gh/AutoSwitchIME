@@ -18,6 +18,8 @@ function loadLib() {
     conversionStatus: tryFunc('ime_get_conversion_status', 'int64', []),
     setAsciiMode: tryFunc('ime_set_ascii_mode', 'int', ['int']),
     composing: tryFunc('ime_is_composing', 'int', []),
+    rimeStateStatus: tryFunc('ime_rime_state_status', 'int64', []),
+    rimeStateWait: tryFunc('ime_rime_state_wait', 'int', ['uint32']),
   };
 }
 
@@ -71,6 +73,12 @@ export interface SystemImeStatus {
   conversionMode: number;
 }
 
+export interface RimeInputState {
+  isAsciiMode: boolean;
+  isComposing: boolean;
+  eventSequence: bigint;
+}
+
 export function nativeSystemImeStatus(): SystemImeStatus | null {
   const value = lib?.conversionStatus?.();
   if (value === null || value === undefined) return null;
@@ -82,6 +90,22 @@ export function nativeSetAsciiMode(ascii: boolean): boolean {
   return (lib?.setAsciiMode?.(ascii ? 1 : 0) ?? 0) !== 0;
 }
 
+export function nativeRimeInputState(): RimeInputState | null {
+  const value = lib?.rimeStateStatus?.();
+  if (value === null || value === undefined) return null;
+  return decodeRimeInputState(typeof value === 'bigint' ? value : BigInt(value));
+}
+
+export function nativeWaitForRimeStateChange(timeoutMillis: number): Promise<number> {
+  const wait = lib?.rimeStateWait;
+  if (!wait) return Promise.resolve(-1);
+  return new Promise((resolve) => {
+    wait.async(timeoutMillis, (error: unknown, result: number) => {
+      resolve(error ? -2 : result);
+    });
+  });
+}
+
 export function decodeSystemImeStatus(packed: bigint): SystemImeStatus | null {
   if (packed < 0n) return null;
   const conversionMode = Number(packed & 0xffff_ffffn);
@@ -90,5 +114,14 @@ export function decodeSystemImeStatus(packed: bigint): SystemImeStatus | null {
     isOpen,
     isAsciiMode: !isOpen || (conversionMode & 0x01) === 0,
     conversionMode,
+  };
+}
+
+export function decodeRimeInputState(packed: bigint): RimeInputState | null {
+  if (packed < 0n) return null;
+  return {
+    isAsciiMode: (packed & 0x01n) !== 0n,
+    isComposing: (packed & 0x02n) !== 0n,
+    eventSequence: packed >> 2n,
   };
 }

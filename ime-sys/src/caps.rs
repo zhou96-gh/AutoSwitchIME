@@ -61,67 +61,60 @@ pub extern "C" fn ime_caps_read() -> i32 {
     CAPS_TOGGLE.load(Ordering::SeqCst)
 }
 
-/// 物理开关 CapsLock，返回新状态
-///
-/// 安全策略：
-/// 1. 检查 SendInput 返回值，仅成功后才翻转内部计数器
-/// 2. 失败时自动重试一次（带 30ms 间隔）
-/// 3. 最终通过 ime_caps_read 确认真实物理状态返回
-#[no_mangle]
-pub extern "C" fn ime_caps_toggle() -> i32 {
-    let try_toggle = || -> bool {
-        unsafe {
-            let mut down: INPUT = zeroed();
-            down.r#type = INPUT_KEYBOARD;
-            down.Anonymous.ki.wVk = VK_CAPITAL;
+fn send_caps_lock_key() -> bool {
+    unsafe {
+        let mut down: INPUT = zeroed();
+        down.r#type = INPUT_KEYBOARD;
+        down.Anonymous.ki.wVk = VK_CAPITAL;
 
-            let mut up: INPUT = zeroed();
-            up.r#type = INPUT_KEYBOARD;
-            up.Anonymous.ki.wVk = VK_CAPITAL;
-            up.Anonymous.ki.dwFlags = KEYEVENTF_KEYUP;
+        let mut up: INPUT = zeroed();
+        up.r#type = INPUT_KEYBOARD;
+        up.Anonymous.ki.wVk = VK_CAPITAL;
+        up.Anonymous.ki.dwFlags = KEYEVENTF_KEYUP;
 
-            let mut inputs = [down, up];
-            let sent = SendInput(2, inputs.as_mut_ptr(), size_of::<INPUT>() as i32);
-            sent == 2
-        }
-    };
-
-    let before = ime_caps_read();
-
-    if try_toggle() {
-        CAPS_TOGGLE.fetch_xor(1, Ordering::SeqCst);
-        PREV_KEY_DOWN.store(false, Ordering::SeqCst);
+        let mut inputs = [down, up];
+        SendInput(2, inputs.as_mut_ptr(), size_of::<INPUT>() as i32) == 2
     }
-
-    let after = ime_caps_read();
-
-    // 若状态未变且 SendInput 返回成功但系统未生效，再试一次
-    if before == after {
-        std::thread::sleep(std::time::Duration::from_millis(30));
-        if try_toggle() {
-            CAPS_TOGGLE.fetch_xor(1, Ordering::SeqCst);
-            PREV_KEY_DOWN.store(false, Ordering::SeqCst);
-        }
-    }
-
-    ime_caps_read()
 }
 
-/// 设置 CapsLock 到指定状态，自动重试直到目标状态或达到上限
-///
-/// 返回最终物理状态
+fn wait_for_injected_key() {
+    std::thread::sleep(std::time::Duration::from_millis(30));
+}
+
+/// 物理开关 CapsLock，返回新状态；注入失败时返回原状态。
+#[no_mangle]
+pub extern "C" fn ime_caps_toggle() -> i32 {
+    let current = ime_caps_read();
+    if send_caps_lock_key() {
+        wait_for_injected_key();
+        ime_caps_read()
+    } else {
+        current
+    }
+}
+
+/// 设置 CapsLock 到指定状态，返回 1 表示已处于目标状态或注入成功，0 表示注入失败。
 #[no_mangle]
 pub extern "C" fn ime_caps_set(on: i32) -> i32 {
     let target = if on != 0 { 1 } else { 0 };
-
-    for _ in 0..3 {
-        let current = ime_caps_read();
-        if current == target {
-            return current;
-        }
-        ime_caps_toggle();
-        std::thread::sleep(std::time::Duration::from_millis(30));
+    if ime_caps_read() == target {
+        return 1;
     }
+    if !send_caps_lock_key() {
+        return 0;
+    }
+    wait_for_injected_key();
+    1
+}
 
-    ime_caps_read()
+/// 在处理 Windows 键盘消息的 GUI 线程调用，读取真实 CapsLock toggle 位并同步跟踪器。
+#[no_mangle]
+pub extern "C" fn ime_caps_message_state() -> i32 {
+    let vk = VK_CAPITAL.into();
+    let state = unsafe { GetKeyState(vk) as i32 & 1 };
+    let key_down = unsafe { (GetAsyncKeyState(vk) as i32 & 0x8000) != 0 };
+    CAPS_TOGGLE.store(state, Ordering::SeqCst);
+    PREV_KEY_DOWN.store(key_down, Ordering::SeqCst);
+    LAST_GKS.store(state, Ordering::SeqCst);
+    state
 }

@@ -38,4 +38,18 @@ class NativeImeSysTest {
     fun `negative result is unavailable`() {
         assertNull(NativeImeSys.decodeSystemImeStatus(-1))
     }
+
+    @Test
+    fun `rime state decodes flags and event sequence`() {
+        val state = NativeImeSys.decodeRimeInputState((17L shl 2) or 0x03)
+
+        assertTrue(state?.isAsciiMode == true)
+        assertTrue(state?.isComposing == true)
+        assertEquals(17, state?.eventSequence)
+    }
+
+    @Test
+    fun `negative rime state is unavailable`() {
+        assertNull(NativeImeSys.decodeRimeInputState(-1))
+    }
 }

@@ -32,6 +32,7 @@ let settings: PluginSettings;
 let disposables: vscode.Disposable[] = [];
 let caretDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let physicalStatePollTimer: ReturnType<typeof setInterval> | null = null;
+let stateSourceWarningVisible = false;
 
 export function activate(context: vscode.ExtensionContext): void {
   outputChannel = vscode.window.createOutputChannel('Auto Switch IME');
@@ -71,7 +72,6 @@ export function activate(context: vscode.ExtensionContext): void {
   systems.register(SystemType.WINDOWS, () => new WindowsSystemImeProvider());
   const system = systems.create(currentSystemType());
   imeGateway = new ImeGateway(provider, system, logger);
-  imeGateway.start();
 
   caretColor = new CaretColorManager(
     settings.chineseCaretColor,
@@ -94,6 +94,9 @@ export function activate(context: vscode.ExtensionContext): void {
     logger,
   );
   imeGateway.onStateChanged = (state) => coordinator?.onPhysicalStateChanged(state);
+  imeGateway.onStateSourceAvailabilityChanged = onStateSourceAvailabilityChanged;
+  imeGateway.onStateChangeSignal = () => coordinator?.pollPhysicalState();
+  imeGateway.start();
 
   setupEditorListeners();
   disposables.push(
@@ -113,7 +116,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const editor = vscode.window.activeTextEditor;
   if (editor) coordinator.initializeEditor(editor);
 
-  physicalStatePollTimer = setInterval(() => coordinator?.pollPhysicalState(), 200);
+  if (!imeGateway.supportsStateChangeNotifications()) {
+    physicalStatePollTimer = setInterval(() => coordinator?.pollPhysicalState(), 200);
+  }
   logger.info('AutoSwitchIME VSCode extension activated');
 }
 
@@ -185,4 +190,16 @@ async function onVimModeChanged(mode: VimMode): Promise<void> {
   if (editor && settings.enabled && vscode.window.state.focused) {
     coordinator?.requestEditorUpdate(editor);
   }
+}
+
+function onStateSourceAvailabilityChanged(available: boolean): void {
+  if (available) {
+    stateSourceWarningVisible = false;
+    return;
+  }
+  if (stateSourceWarningVisible) return;
+  stateSourceWarningVisible = true;
+  void vscode.window.showWarningMessage(
+    'AutoSwitchIME 已暂停：当前输入法状态源不可用。请部署或重新部署对应的输入法状态组件。',
+  );
 }

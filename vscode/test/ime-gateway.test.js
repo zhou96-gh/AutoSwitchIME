@@ -38,6 +38,7 @@ function system(initial = {}) {
     readAsciiMode: () => state.ascii,
     readCapsLock: () => state.caps,
     readComposing: () => state.composing,
+    setAsciiState: (ascii) => { state.ascii = ascii; },
     async switchAsciiMode(ascii, shouldContinue) {
       this.asciiSwitchCount++;
       if (!shouldContinue()) return false;
@@ -111,6 +112,116 @@ test('input method switcher takes precedence and failure does not fall back', as
   assert.equal(ime.getTrackedState().isAsciiMode, false);
 });
 
+test('forced ASCII mode invokes input method switcher when system state is already ASCII', async () => {
+  let providerSwitchCount = 0;
+  const systemProvider = system({ ascii: true });
+  const imeProvider = provider({
+    asciiModeSwitcher: {
+      async switchAsciiMode() {
+        providerSwitchCount++;
+        return true;
+      },
+    },
+  });
+  const ime = new ImeGateway(imeProvider, systemProvider, logger);
+  ime.refreshState();
+
+  await ime.setAsciiMode(true, () => true, true);
+
+  assert.equal(providerSwitchCount, 1);
+  assert.equal(systemProvider.asciiSwitchCount, 0);
+});
+
+test('first input method action runs when provider state has not been observed', async () => {
+  let providerSwitchCount = 0;
+  const systemProvider = system({ ascii: true });
+  const imeProvider = provider({
+    asciiModeSwitcher: {
+      async switchAsciiMode() {
+        providerSwitchCount++;
+        return true;
+      },
+    },
+  });
+  const ime = new ImeGateway(imeProvider, systemProvider, logger);
+  ime.refreshState();
+
+  await ime.setAsciiMode(true);
+
+  assert.equal(providerSwitchCount, 1);
+  assert.equal(ime.getTrackedState().isAsciiMode, true);
+});
+
+test('input method state source remains authoritative when system state disagrees', async () => {
+  let providerSwitchCount = 0;
+  let providerAscii = true;
+  const systemProvider = system({ ascii: true });
+  const imeProvider = provider({
+    stateSource: {
+      readAsciiMode() {
+        return providerAscii;
+      },
+    },
+    asciiModeSwitcher: {
+      async switchAsciiMode(ascii) {
+        providerSwitchCount++;
+        providerAscii = ascii;
+        return true;
+      },
+    },
+  });
+  const ime = new ImeGateway(imeProvider, systemProvider, logger);
+  ime.refreshState();
+
+  await ime.setAsciiMode(false);
+  ime.refreshState();
+
+  assert.equal(ime.getTrackedState().isAsciiMode, false);
+  assert.equal(providerSwitchCount, 1);
+  assert.equal(systemProvider.asciiSwitchCount, 0);
+});
+
+test('successful switch command does not replace observed input method state', async () => {
+  let providerSwitchCount = 0;
+  const imeProvider = provider({
+    stateSource: {
+      readAsciiMode: () => false,
+    },
+    asciiModeSwitcher: {
+      async switchAsciiMode() {
+        providerSwitchCount++;
+        return true;
+      },
+    },
+  });
+  const ime = new ImeGateway(imeProvider, system({ ascii: true }), logger);
+  ime.refreshState();
+
+  await ime.setAsciiMode(true);
+
+  assert.equal(ime.getTrackedState().isAsciiMode, false);
+  assert.equal(providerSwitchCount, 1);
+});
+
+test('system change updates tracked input method state', async () => {
+  const systemProvider = system({ ascii: true });
+  const imeProvider = provider({
+    asciiModeSwitcher: {
+      async switchAsciiMode() {
+        return true;
+      },
+    },
+  });
+  const ime = new ImeGateway(imeProvider, systemProvider, logger);
+  ime.refreshState();
+  await ime.setAsciiMode(true);
+
+  systemProvider.setAsciiState(false);
+  ime.refreshState();
+
+  assert.equal(ime.getTrackedState().isAsciiMode, false);
+});
+
 test('system providers are selected through registry', () => {
   const registry = new SystemImeProviderRegistry();
   const windows = system();
@@ -121,4 +232,35 @@ test('system providers are selected through registry', () => {
   assert.equal(currentSystemType('win32'), SystemType.WINDOWS);
   assert.equal(currentSystemType('darwin'), SystemType.MACOS);
   assert.equal(currentSystemType('linux'), SystemType.LINUX);
+});
+
+test('declared unavailable state source suspends actions until it recovers', async () => {
+  let available = false;
+  let providerSwitchCount = 0;
+  const imeProvider = provider({
+    stateSource: {
+      isAvailable: () => available,
+      readState: () => ({ isAsciiMode: false, isComposing: false }),
+    },
+    asciiModeSwitcher: {
+      async switchAsciiMode() {
+        providerSwitchCount++;
+        return true;
+      },
+    },
+  });
+  const ime = new ImeGateway(imeProvider, system({ ascii: true }), logger);
+
+  ime.start();
+  await ime.setAsciiMode(false);
+
+  assert.equal(ime.isStateSourceAvailable(), false);
+  assert.equal(providerSwitchCount, 0);
+
+  available = true;
+  ime.refreshState();
+  await ime.setAsciiMode(true);
+
+  assert.equal(ime.isStateSourceAvailable(), true);
+  assert.equal(providerSwitchCount, 1);
 });

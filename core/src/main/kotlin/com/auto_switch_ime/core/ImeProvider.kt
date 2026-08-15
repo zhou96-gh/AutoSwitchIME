@@ -11,7 +11,7 @@ interface ImeProvider {
     /** 输入法名称，用于日志和调试。 */
     val name: String
 
-    /** 输入法专用状态源；未提供或字段不可用时回退到系统级状态。 */
+    /** 输入法专用状态源；未提供时使用系统级状态，已提供但不可用时暂停插件。 */
     val stateSource: ImeStateSource?
         get() = null
 
@@ -30,12 +30,32 @@ interface ImeProvider {
 
 /** 输入法级别可以只提供其中一部分状态。 */
 interface ImeStateSource {
+    /** 已声明专用状态源但当前不可用时，插件必须暂停生效。 */
+    fun isAvailable(): Boolean = true
+
+    /** 支持时由后台等待状态变化；false 表示超时或尚不可用。 */
+    fun supportsChangeNotifications(): Boolean = false
+
+    fun waitForStateChange(timeoutMillis: Int): Boolean = false
+
+    fun readState(): ImePartialState = ImePartialState(
+        isAsciiMode = readAsciiMode(),
+        isCapsLock = readCapsLock(),
+        isComposing = readComposing()
+    )
+
     fun readAsciiMode(): Boolean? = null
 
     fun readCapsLock(): Boolean? = null
 
     fun readComposing(): Boolean? = null
 }
+
+data class ImePartialState(
+    val isAsciiMode: Boolean? = null,
+    val isCapsLock: Boolean? = null,
+    val isComposing: Boolean? = null
+)
 
 fun interface ImeAsciiModeSwitcher {
     /** 返回 false 表示输入法专用切换执行失败，不再降级到系统级切换。 */
